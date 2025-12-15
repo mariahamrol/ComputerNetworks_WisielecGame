@@ -27,7 +27,7 @@ void create_game(int fd){
     cin >> answer;
     if(answer != 'y' && answer != 'Y') {
         const char* joinGameMsg = "JOIN_GAME";
-        write(fd,joinGameMsg,strlen(joinGameMsg));
+        write(fd, joinGameMsg, strlen(joinGameMsg));
         int game_id;
         int n = read(0,&game_id,sizeof(game_id));
         write(fd,&game_id,n);
@@ -53,7 +53,7 @@ void logining_in(int fd){
         int n = read(0,login,sizeof(login));
         if(n>0){
             login[n] = '\0';
-            write(fd,login,sizeof(login));
+            write(fd, login, strlen(login));
             int response;
             int readCount = read(fd,&response,sizeof(response));
             if(response==0){

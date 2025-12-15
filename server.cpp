@@ -40,7 +40,8 @@ void create_game(){
 
 void joining_game(int fd){
     char response[1024];
-    int n = read(fd,response,sizeof(response));
+    int n = read(fd, response, sizeof(response) - 1);
+    if(n <= 0) return;
     response[n] = '\0';
     if(string(response) == "JOIN_GAME"){
         int game_id;
@@ -56,7 +57,7 @@ void joining_game(int fd){
 void gamer_login(int fd){
     char buf[1024];
     while(true){
-        int n = read(fd, buf, sizeof(buf));
+        int n = read(fd, buf, sizeof(buf) - 1);
         if(n <= 0) break;
         buf[n] = '\0';
 

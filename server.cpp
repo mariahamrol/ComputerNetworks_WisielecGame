@@ -102,18 +102,28 @@ void manage_gamer(int fd){
 int main(int argc, char **argv){
     char codeword[1024] = "Little white lies";
     int user_count=0;
-    int server_fd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
-    if(server_fd < 0){
-        perror("socket");
-        return 1;
-    }
+	int server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (server_fd < 0) {
+		perror("socket");
+		return 1;
+	}
 
-    sockaddr_in server;
-    sockaddr_in gamer;
+	int opt = 1;
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+	sockaddr_in server{};
+    sockaddr_in gamer{};
+
+	server.sin_family = AF_INET;
+	server.sin_port = htons(12345);
+	server.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+	if (::bind(server_fd, (sockaddr*)&server, sizeof(server)) == -1) {
+		perror("bind");
+		return 1;
+	}
+
     memset(&server, 0, sizeof(server));
-    server.sin_family = AF_INET;
-    server.sin_port = htons(12345);
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     bind(server_fd,(sockaddr*)&server,sizeof(server));
     listen(server_fd,10);

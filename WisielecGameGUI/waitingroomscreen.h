@@ -3,32 +3,32 @@
 
 #include <QWidget>
 #include <QLabel>
+#include <QPushButton>
 #include <QVBoxLayout>
-#include <QScrollArea>
 #include <vector>
+
 
 class WaitingRoomScreen : public QWidget
 {
     Q_OBJECT
-
 public:
     explicit WaitingRoomScreen(QWidget *parent = nullptr);
 
-    void set_login(const char *loginText);
-    void set_games(const std::vector<int> &gameIds);
+    void setRoomState(
+        int gameId,
+        const std::vector<QString> &players,
+        bool isHost
+        );
 
-signals:
-    void joinGame(int gameId);
+    signals:
+        void startGameClicked();
+        void leaveRoomClicked();
+        void startGame(int gameId);
 
-private:
-    QLabel *welcomeLabel;
-
-    QScrollArea *scrollArea;
-    QWidget *gamesWidget;
-    QVBoxLayout *gamesLayout;
-
-    QFont appFont;
-    char login[30];
+    private:
+        QLabel *gameIdLabel;
+        QVBoxLayout *playersLayout;
+        QPushButton *startButton;
 };
 
 #endif // WAITINGROOMSCREEN_H

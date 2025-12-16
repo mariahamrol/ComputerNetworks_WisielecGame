@@ -1,7 +1,9 @@
 #include "mainwindow.h"
 #include "startscreen.h"
+#include "lobbyscreen.h"
 #include "waitingroomscreen.h"
-#include <vector>
+#include "gamescreen.h"
+#include "gamecontroller.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -13,24 +15,56 @@ MainWindow::MainWindow(QWidget *parent)
     //Start game screen only for entering login
     startScreen = new StartScreen(stack);
     //Waiting room screen our main lobby it's for choosing what game to join
+    lobbyScreen = new LobbyScreen(stack);
+
     waitingScreen = new WaitingRoomScreen(stack);
+    gameScreen = new GameScreen(stack);
+
+    controller = new GameController(this);
 
     stack->addWidget(startScreen);
+    stack->addWidget(lobbyScreen);
     stack->addWidget(waitingScreen);
-    //Later this part should be done by getting a message from server and dinamicly changing valid games so this
-    std::vector<int> games;
-    for (int i = 1; i <= 15; ++i){
-        games.push_back(i);
-    }
+    stack->addWidget(gameScreen);
 
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
 
-    //We open Waiting Room only if server sent a message that login is correct
-    //If loghin was incorrect we stay in startScreen and error appears? or maybe just a warning i dont know but it doesnt matter
-    connect(startScreen, &StartScreen::startClicked, this, [=](const char *login) {
-        waitingScreen->set_login(login);
-        waitingScreen->set_games(games);
-        stack->setCurrentWidget(waitingScreen);
+    connect(startScreen, &StartScreen::startClicked,
+            controller, &GameController::loginRequested);
+
+    // WaitingRoom → Controller
+    connect(lobbyScreen, &LobbyScreen::joinGame,
+            controller, &GameController::joinGameRequested);
+
+    // Controller → GUI
+    connect(controller, &GameController::loginAccepted, this, [&]() {
+        stack->setCurrentWidget(lobbyScreen);
     });
+
+    connect(controller, &GameController::lobbyStateUpdated,
+            lobbyScreen, &LobbyScreen::display_games);
+
+    connect(controller, &GameController::joinedGame,
+            this, [&](int gameId,
+                std::vector<QString> players,
+                bool isHost)
+            {
+                waitingScreen->setRoomState(gameId, players, isHost);
+                stack->setCurrentWidget(waitingScreen);
+            });
+
+    connect(waitingScreen, &WaitingRoomScreen::startGame,
+            controller, &GameController::startGameRequested);
+
+    connect(controller, &GameController::gameStarted,
+            this, [&](int gameId,
+                QString hiddenWord,
+                std::vector<QString> players)
+            {
+                // gameScreen->setHiddenWord(hiddenWord);
+                // gameScreen->setPlayers(players);
+
+                stack->setCurrentWidget(gameScreen);
+            });
 }

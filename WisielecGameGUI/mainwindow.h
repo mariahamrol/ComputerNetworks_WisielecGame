@@ -3,9 +3,12 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
+#include "gamecontroller.h"
 
 class StartScreen;
+class LobbyScreen;
 class WaitingRoomScreen;
+class GameScreen;
 
 class MainWindow : public QMainWindow
 {
@@ -16,7 +19,10 @@ public:
 private:
     QStackedWidget *stack;
     StartScreen *startScreen;
+    LobbyScreen *lobbyScreen;
     WaitingRoomScreen *waitingScreen;
+    GameController *controller;
+    GameScreen *gameScreen;
 };
 
 #endif

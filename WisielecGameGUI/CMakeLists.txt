@@ -13,7 +13,10 @@ qt_add_executable(WisielecGameGUI
     mainwindow.h
     mainwindow.ui
     startscreen.h startscreen.cpp
+    lobbyscreen.h lobbyscreen.cpp
+    gamecontroller.h gamecontroller.cpp
     waitingroomscreen.h waitingroomscreen.cpp
+    gamescreen.h gamescreen.cpp
 )
 
 target_link_libraries(WisielecGameGUI

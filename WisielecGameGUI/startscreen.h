@@ -14,14 +14,14 @@ public:
     explicit StartScreen(QWidget *parent = nullptr);
 
 signals:
-    void startClicked(const char login[30]);
+    void startClicked(const QString login);
 
 private:
     QPushButton *start_button;
     QLabel *welcome_label;
     QLineEdit *login_enter;
     QLabel *picture;        // for logo/image
-    char login[30];
+    QString *login;
 };
 
 #endif // STARTSCREEN_H

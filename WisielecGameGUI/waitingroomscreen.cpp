@@ -1,92 +1,73 @@
 #include "waitingroomscreen.h"
-
-#include <QHBoxLayout>
-#include <QPushButton>
+#include <QVBoxLayout>
 #include <QFontDatabase>
-#include <QDebug>
-#include <vector>
 
 WaitingRoomScreen::WaitingRoomScreen(QWidget *parent)
     : QWidget(parent)
 {
-    // -------- Load font --------
-    int fontId = QFontDatabase::addApplicationFont(
-        "C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/"
-        "WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
-
+    QFont appFont;
+    int fontId = QFontDatabase::addApplicationFont("C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
-        appFont = QFont(family, 16, QFont::Bold);
+        appFont = QFont(family);
     } else {
-        qDebug() << "Font load failed, using default";
-        appFont = QFont("Arial", 16, QFont::Bold);
+        qDebug() << "Failed to load font!";
+        appFont = QFont("Arial");
     }
 
-    //Main layout
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setSpacing(20);
+    QVBoxLayout *main = new QVBoxLayout(this);
+    gameIdLabel = new QLabel("Game ID: ");
+    gameIdLabel->setAlignment(Qt::AlignCenter);
+    QFont gameIdFont = appFont;
+    gameIdFont.setBold(true);
+    gameIdFont.setPointSize(35);
+    gameIdLabel->setFont(gameIdFont);
+    main->addWidget(gameIdLabel);
 
-    // Welcome label checking if we got the login
-    welcomeLabel = new QLabel("Welcome!");
-    welcomeLabel->setAlignment(Qt::AlignCenter);
-    welcomeLabel->setFont(appFont);
-    mainLayout->addWidget(welcomeLabel);
+    QWidget *playersWidget = new QWidget(this);
+    QFont playersFont = appFont;
+    playersFont.setBold(true);
+    playersFont.setPointSize(25);
+    playersWidget->setFont(playersFont);
+    playersLayout = new QVBoxLayout(playersWidget);
+    playersLayout->setAlignment(Qt::AlignCenter);
+    main->addWidget(playersWidget);
 
-    //Scroll area withy all the games in the list
-    scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
+    startButton = new QPushButton("Start Game");
+    startButton->setEnabled(false);
+    QFont buttonFont = appFont;
+    buttonFont.setBold(true);
+    buttonFont.setPointSize(25);
+    startButton->setFont(buttonFont);
+    main->addWidget(startButton);
 
-    gamesWidget = new QWidget(this);
-    gamesLayout = new QVBoxLayout(gamesWidget);
-    gamesLayout->setAlignment(Qt::AlignTop);
-    gamesLayout->setSpacing(10);
-
-    scrollArea->setWidget(gamesWidget);
-    mainLayout->addWidget(scrollArea);
-
-    setLayout(mainLayout);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    connect(startButton, &QPushButton::clicked,
+            this, &WaitingRoomScreen::startGameClicked);
 }
 
-void WaitingRoomScreen::set_login(const char *loginText)
+void WaitingRoomScreen::setRoomState(
+    int gameId,
+    const std::vector<QString> &players,
+    bool isHost)
 {
-    if (!loginText) return;
+    gameIdLabel->setText(QString("Game ID: %1").arg(gameId));
 
-    strncpy(login, loginText, sizeof(login));
-    login[sizeof(login) - 1] = '\0';
-
-    welcomeLabel->setText(QString("Welcome to the game %1").arg(login));
-}
-
-void WaitingRoomScreen::set_games(const std::vector<int> &gameIds)
-{
     QLayoutItem *item;
-    while ((item = gamesLayout->takeAt(0)) != nullptr) {
+    while ((item = playersLayout->takeAt(0)) != nullptr) {
         delete item->widget();
         delete item;
     }
 
-    for (int gameId : gameIds) {
-        QWidget *row = new QWidget(this);
-        QHBoxLayout *rowLayout = new QHBoxLayout(row);
-
-        QLabel *label = new QLabel(QString("Game ID: %1").arg(gameId));
-        label->setFont(appFont);
-
-        QPushButton *joinButton = new QPushButton("Join");
-        joinButton->setFont(appFont);
-        joinButton->setStyleSheet("QPushButton {background-color: lightgreen}");
-
-        rowLayout->addWidget(label);
-        rowLayout->addStretch();
-        rowLayout->addWidget(joinButton);
-
-        gamesLayout->addWidget(row);
-
-        connect(joinButton, &QPushButton::clicked, this, [=]() {
-            emit joinGame(gameId);
-        });
+    for (const auto &nick : players) {
+        playersLayout->addWidget(new QLabel(nick));
     }
 
-    gamesLayout->addStretch();
+    startButton->setEnabled(isHost);
+    if(isHost){
+        startButton->setStyleSheet("QPushButton {background-color: lightgreen}");
+    }
+
+    connect(startButton, &QPushButton::clicked, this, [=]() {
+        emit startGame(gameId);
+    });
 }

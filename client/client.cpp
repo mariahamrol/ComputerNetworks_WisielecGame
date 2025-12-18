@@ -17,75 +17,142 @@
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 12345
 
+bool handle_login(int sfd);
+void client_event_loop(int sfd);
+void handle_lobby_message(int sfd, MsgHeader& hdr, char* buffer);
+
 void print_games_list(MsgLobbyState* msg);
 void handle_lobby(int sfd);
 
-int main(int argc, char** argv) {
+int main() {
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sfd < 0) {
         perror("socket");
         return 1;
     }
 
-    struct sockaddr_in sa;
-    memset(&sa, 0, sizeof(sa));
+    sockaddr_in sa{};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(SERVER_PORT);
-    if (inet_pton(AF_INET, SERVER_IP, &sa.sin_addr) <= 0) {
-        perror("inet_pton");
-        close(sfd);
-        return 1;
-    }
+    inet_pton(AF_INET, SERVER_IP, &sa.sin_addr);
 
-    if (connect(sfd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+    if (connect(sfd, (sockaddr*)&sa, sizeof(sa)) < 0) {
         perror("connect");
         close(sfd);
         return 1;
     }
 
-    std::cout << "Połączono z serwerem." << std::endl;
+    std::cout << "Połączono z serwerem.\n";
 
-    // --- Logowanie ---
+    if (!handle_login(sfd)) {
+        close(sfd);
+        return 0;
+    }
+
+    client_event_loop(sfd);
+
+    close(sfd);
+    std::cout << "Rozłączono.\n";
+    return 0;
+}
+
+void client_event_loop(int sfd) {
+    while (true) {
+        MsgHeader hdr;
+        char buffer[4096];
+
+        int r = recv_msg(sfd, hdr, buffer, sizeof(buffer));
+        if (r <= 0) {
+            std::cerr << "Utracono połączenie z serwerem.\n";
+            return;
+        }
+
+        handle_lobby_message(sfd, hdr, buffer);
+    }
+}
+
+void handle_lobby_message(int sfd, MsgHeader& hdr, char* buffer) {
+    switch (hdr.type) {
+
+        case MSG_LOBBY_STATE: {
+            auto* lobby = (MsgLobbyState*)buffer;
+            print_games_list(lobby);
+
+            std::cout << "ID | c = create | q = quit\n> ";
+            std::string choice;
+            std::cin >> choice;
+
+            if (choice == "q") {
+                exit(0);
+            }
+            else if (choice == "c") {
+                send_msg(sfd, MSG_CREATE_GAME_REQ, nullptr, 0);
+            }
+            else {
+                try {
+                    MsgJoinGameReq req;
+                    req.game_id = std::stoul(choice);
+                    send_msg(sfd, MSG_JOIN_GAME_REQ, &req, sizeof(req));
+                } catch (...) {
+                    std::cerr << "Nieprawidłowy wybór.\n";
+                }
+            }
+            break;
+        }
+
+        case MSG_JOIN_GAME_OK:
+            std::cout << "Dołączono do gry.\n";
+            // tutaj w przyszłości: game_loop()
+            break;
+
+        case MSG_JOIN_GAME_FAIL:
+            std::cerr << "Nie udało się dołączyć do gry.\n";
+            break;
+
+        default:
+            std::cerr << "Nieznany typ wiadomości: " << hdr.type << "\n";
+    }
+}
+
+
+bool handle_login(int sfd) {
     std::string nick;
     std::cout << "Podaj swój nick: ";
     std::cin >> nick;
 
-    MsgLoginReq login_req;
-    strncpy(login_req.nick, nick.c_str(), MAX_NICK_LEN - 1);
-    login_req.nick[MAX_NICK_LEN - 1] = '\0';
+    MsgLoginReq req{};
+    strncpy(req.nick, nick.c_str(), MAX_NICK_LEN - 1);
 
-    if (send_msg(sfd, MSG_LOGIN_REQ, &login_req, sizeof(login_req)) != 0) {
-        std::cerr << "Nie udało się wysłać prośby o logowanie." << std::endl;
-        close(sfd);
-        return 1;
+    if (send_msg(sfd, MSG_LOGIN_REQ, &req, sizeof(req)) != 0) {
+        std::cerr << "Błąd wysyłania loginu.\n";
+        return false;
     }
 
-    // --- Oczekiwanie na odpowiedź serwera ---
     MsgHeader hdr;
     char buffer[4096];
+
     int r = recv_msg(sfd, hdr, buffer, sizeof(buffer));
     if (r <= 0) {
-        std::cerr << "Serwer zamknął połączenie lub wystąpił błąd." << std::endl;
-        close(sfd);
-        return 1;
+        std::cerr << "Serwer zamknął połączenie.\n";
+        return false;
     }
 
     if (hdr.type == MSG_LOGIN_OK) {
-        std::cout << "Zalogowano pomyślnie jako: " << nick << std::endl;
-        std::cout << "Wchodzę do lobby..." << std::endl;
-        handle_lobby(sfd);
-    } else if (hdr.type == MSG_LOGIN_TAKEN) {
-        std::cerr << "Nick jest już zajęty." << std::endl;
-    } else {
-        std::cerr << "Otrzymano nieoczekiwaną odpowiedź od serwera: " << hdr.type << std::endl;
+        std::cout << "Zalogowano jako: " << nick << "\n";
+        return true;
     }
 
-    std::cout << "Rozłączono." << std::endl;
-    close(sfd);
-    return 0;
+    if (hdr.type == MSG_LOGIN_TAKEN) {
+        std::cerr << "Nick zajęty.\n";
+        return false;
+    }
+
+    std::cerr << "Nieoczekiwana odpowiedź: " << hdr.type << "\n";
+    return false;
 }
 
-// Funkcja obsługująca interakcje w lobby (wybór gry)
+
+
 void handle_lobby(int sfd) {
     // Po zalogowaniu serwer powinien automatycznie przysłać stan lobby (MSG_LOBBY_STATE)
     // Czekamy na tę wiadomość w pętli.
@@ -120,6 +187,7 @@ void handle_lobby(int sfd) {
                     if (send_msg(sfd, MSG_CREATE_GAME_REQ, NULL, 0) != 0) {
                          std::cerr << "Nie udało się wysłać prośby o stworzenie gry." << std::endl;
                     }
+					
                     // Po wysłaniu prośby serwer powinien odesłać nowy MSG_LOBBY_STATE
                 } else {
                     try {
@@ -160,7 +228,7 @@ void print_games_list(MsgLobbyState* msg) {
     } else {
         for (uint32_t i = 0; i < msg->games_count; ++i) {
             std::cout << "  * Pokój " << msg->games[i].game_id 
-                      << " (" << (int)msg->games[i].players_count << "/2 graczy)" << std::endl;
+                      << " (" << (int)msg->games[i].players_count << "/8 graczy)" << std::endl;
         }
     }
     std::cout << "------------------------" << std::endl;

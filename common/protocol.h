@@ -20,6 +20,7 @@ typedef enum {
     /* LOBBY */
     MSG_LOBBY_STATE,
     MSG_CREATE_GAME_REQ,
+    MSG_CREATE_GAME_OK,
     MSG_JOIN_GAME_REQ,
     MSG_JOIN_GAME_OK,
     MSG_JOIN_GAME_FAIL,

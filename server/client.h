@@ -1,14 +1,16 @@
 #ifndef SERVER_CLIENT_H
 #define SERVER_CLIENT_H
 
+#include <vector>
 #include "../common/states.h"
 
-typedef struct {
+struct Client {
     int fd;
     ClientState state;
     char nick[32];
     int game_id;
     int active;
-} Client;
+    std::vector<char> buffer;
+};
 
 #endif

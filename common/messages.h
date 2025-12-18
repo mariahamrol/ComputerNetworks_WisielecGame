@@ -30,6 +30,10 @@ typedef struct {
     GameInfo games[MAX_GAMES];
 } MsgLobbyState;
 
+typedef struct {
+    uint32_t game_id;
+    uint8_t players_count;
+} LobbyGameInfo;
 
 /* ===== GAME STATE ===== */
 

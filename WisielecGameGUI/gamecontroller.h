@@ -13,6 +13,7 @@ public slots:
     void loginRequested(const QString &login);
     void joinGameRequested(int gameId);
     void startGameRequested(int gameId);
+    // bool give_mistakes = true;
 
 signals:
     void loginAccepted();

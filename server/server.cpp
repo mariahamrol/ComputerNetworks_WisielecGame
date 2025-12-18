@@ -16,7 +16,7 @@
 #include "../common/protocol.h"
 #include "../common/messages.h"
 #include "../common/net.hpp"
-#include "client.h"
+#include "../client/client.h"
 #include "game.h"
 
 #define MAX_EVENTS 128
@@ -33,6 +33,7 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 void handle_client_data(std::shared_ptr<Client> client, int epoll_fd);
 void broadcast_lobby_state();
 void send_lobby_state(std::shared_ptr<Client> client);
+void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg);
 
 static void set_non_blocking(int fd) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
@@ -204,11 +205,59 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 		case MSG_CREATE_GAME_REQ:
 			handle_create_game(client);
 			break;
+		case MSG_JOIN_GAME_REQ:
+			handle_join_game(client, (MsgJoinGameReq*)payload);
+			break;
 
         default:
             printf("Nieznany typ wiadomości %d (fd=%d)\n", hdr.type, client->fd);
             break;
     }
+}
+void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg) {
+	if (client->state != STATE_LOBBY) {
+		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
+			perror("send_msg JOIN_GAME_FAIL");
+		}
+		return;
+	}
+
+	auto it = std::find_if(games.begin(), games.end(),
+		[msg](const Game& g) { return g.id == msg->game_id; });
+
+	if (it == games.end() || it->player_count >= MAX_PLAYERS) {
+		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
+			perror("send_msg JOIN_GAME_FAIL");
+		}
+		return;
+	}
+
+	// Dodaj gracza do gry
+	it->players[it->player_count] = client->fd;
+	it->player_count++;
+
+	client->game_id = it->id;
+	client->is_owner = 0;
+	client->state = STATE_IN_GAME;
+
+	printf("Klient %s dołączył do gry id=%d\n", client->nick, it->id);
+
+	// Powiadom gracza
+	if (send_msg(client->fd, MSG_JOIN_GAME_OK, &(*it), 0) != 0) {
+		perror("send_msg JOIN_GAME_OK");
+	}
+
+	printf("Gry dostępne na serwerze po dołączeniu nowego gracza:\n");
+
+    int gc = 0;
+    for (const auto& game : games) {
+        if (gc >= MAX_GAMES)
+            break;
+		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
+        gc++;
+    }
+
+	broadcast_lobby_state();
 }
 
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
@@ -218,17 +267,23 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
     strncpy(received_nick, msg->nick, MAX_NICK_LEN - 1);
     received_nick[MAX_NICK_LEN - 1] = '\0';
 
-    printf("Logowanie klienta (fd=%d) nick=%s\n", client->fd, received_nick);
+	printf("Logowanie klienta (fd=%d) nick=%s\n", client->fd, received_nick);
     
-    bool nick_taken = false;
-    for (auto const& [fd, other] : clients) {
-        if (other != client &&
-            other->active &&
-            strcmp(other->nick, received_nick) == 0) {
-            nick_taken = true;
-            break;
-        }
-    }
+    
+	bool nick_taken = false;
+
+	for (auto const& [fd, other] : clients) {
+		if (other == client)
+			continue;
+
+		if (other->state >= STATE_LOBBY &&
+			strcmp(other->nick, received_nick) == 0) {
+			nick_taken = true;
+			break;
+		}
+	}
+
+	
 
     if (nick_taken) {
         send_msg(client->fd, MSG_LOGIN_TAKEN, nullptr, 0);
@@ -249,7 +304,8 @@ void disconnect_client(int cfd, int epoll_fd) {
     if (clients.find(cfd) == clients.end()) {
         return; // Already disconnected
     }
-    
+	// TODO  IF Client is_owner remove game and notify players
+
     if (epoll_fd > 0) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cfd, nullptr);
     }
@@ -262,47 +318,64 @@ void disconnect_client(int cfd, int epoll_fd) {
 
 void handle_create_game(std::shared_ptr<Client> client) {
     if (client->state != STATE_LOBBY) {
-        printf("Klient %s nie jest w lobby – nie może stworzyć gry\n", client->nick);
+		if (send_msg(client->fd, MSG_CREATE_GAME_FAIL, nullptr, 0) != 0) {
+			perror("send_msg CREATE_GAME_FAIL");
+		}
         return;
     }
 
     Game game;
     memset(&game, 0, sizeof(Game));
 
-    // --- ID gry ---
+    // ID gry
     game.id = games.empty() ? 1 : games.back().id + 1;
 
-    // --- Owner ---
+    // Owner
     strncpy(game.owner, client->nick, sizeof(game.owner) - 1);
 
-    // --- Gracze ---
-    game.players[0] = client->fd;   // lub client->id jeśli dodasz ID
+    // Gracze
+    game.players[0] = client->fd;
     game.player_count = 1;
 
-    // --- Stan gry ---
+    // Stan gry
     game.started = 0;
 
-    // --- Reset guessed ---
+    // Reset guessed
     memset(game.guessed, 0, sizeof(game.guessed));
 
-    // --- Słowo (na razie puste) ---
+    // Słowo (na razie puste)
     memset(game.word, 0, sizeof(game.word));
 
     games.push_back(game);
-	broadcast_lobby_state();
 
     client->game_id = game.id;
+	client->is_owner = 1;
+	client->state = STATE_IN_GAME;
 
-    printf(
-        "Utworzono grę id=%d owner=%s\n",
-        game.id,
-        game.owner
-    );
+    printf("Utworzono grę id=%d owner=%s\n",game.id, game.owner);
 
-    // --- Powiadom twórcę ---
-    send_msg(client->fd, MSG_CREATE_GAME_OK, nullptr, 0);
+    // Powiadom twórcę 
+	printf("Wysyłam CREATE_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
+    if (send_msg(client->fd, MSG_CREATE_GAME_OK, nullptr, 0) != 0) {
+		perror("send_msg CREATE_GAME_OK");
+	}
 
-    // --- TODO: broadcast nowego lobby state do wszystkich w lobby ---
+	// prześlij stan aktulany nowo stworzonej gry
+    if (send_msg(client->fd, MSG_JOIN_GAME_OK, &game, 0) != 0) {
+		perror("send_msg JOIN_GAME_OK");
+	}
+	
+	printf("Gry dostępne na serwerze:\n");
+
+    int gc = 0;
+    for (const auto& game : games) {
+        if (gc >= MAX_GAMES)
+            break;
+		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
+        gc++;
+    }
+
+	broadcast_lobby_state();
 }
 
 void send_lobby_state(std::shared_ptr<Client> client) {
@@ -323,7 +396,7 @@ void send_lobby_state(std::shared_ptr<Client> client) {
     send_msg(client->fd, MSG_LOBBY_STATE, &msg, sizeof(msg));
 }
 
-void broadcast_lobby_state() {
+void broadcast_lobby_state() { // TODO tylko jak gracz jest w lobby
     for (auto& [fd, other] : clients) {
         if (other->state == STATE_LOBBY) {
             send_lobby_state(other);

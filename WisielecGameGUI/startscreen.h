@@ -12,6 +12,8 @@ class StartScreen : public QWidget
 
 public:
     explicit StartScreen(QWidget *parent = nullptr);
+public slots:
+    void showLoginError(const QString &msg);
 
 signals:
     void startClicked(const QString login);

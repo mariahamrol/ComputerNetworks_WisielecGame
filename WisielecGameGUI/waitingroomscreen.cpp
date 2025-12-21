@@ -6,7 +6,7 @@ WaitingRoomScreen::WaitingRoomScreen(QWidget *parent)
     : QWidget(parent)
 {
     QFont appFont;
-    int fontId = QFontDatabase::addApplicationFont("C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
+    int fontId = QFontDatabase::addApplicationFont("./assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
         appFont = QFont(family);

@@ -53,12 +53,12 @@ int main() {
         std::cout << "\n";
     };
 
-    client.onCreateRoomOk = [] {
-        std::cout << "Utworzono pokój\n";
+    client.onCreateRoomOk = [](uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players) {
+        std::cout << "Utworzono pokój id=" << gameId << " owner=" << owner << " players=" << (int)playersCount << "\n";
     };
 
-	client.onJoinRoomOk = [] {
-		std::cout << "Dołączono do pokoju\n";
+	client.onJoinRoomOk = [](uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players) {
+		std::cout << "Dołączono do pokoju id=" << gameId << " owner=" << owner << " players=" << (int)playersCount << "\n";
 	};
 	client.onJoinRoomFail = [] {
 		std::cout << "Nie udało się dołączyć do pokoju\n";

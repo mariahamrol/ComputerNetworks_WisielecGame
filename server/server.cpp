@@ -405,10 +405,28 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 
 	printf("Klient %s dołączył do gry id=%d\n", client->nick, game->id);
 
-	// Powiadom gracza
-	if (send_msg(client->fd, MSG_JOIN_GAME_OK, game, 0) != 0) {
-		perror("send_msg JOIN_GAME_OK");
-	}
+    // Powiadom gracza o dołączeniu - przekaż podstawowe info o pokoju
+    MsgRoomInfo info;
+    memset(&info, 0, sizeof(info));
+    info.game_id = game->id;
+    info.players_count = game->player_count;
+    strncpy(info.owner, game->owner, MAX_NICK_LEN - 1);
+    info.owner[MAX_NICK_LEN - 1] = '\0';
+    // fill player nicknames
+    for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
+        int pfd = game->players[i];
+        auto cit = clients.find(pfd);
+        if (cit != clients.end()) {
+            strncpy(info.players[i], cit->second->nick, MAX_NICK_LEN - 1);
+            info.players[i][MAX_NICK_LEN - 1] = '\0';
+        } else {
+            info.players[i][0] = '\0';
+        }
+    }
+
+    if (send_msg(client->fd, MSG_JOIN_ROOM_OK, &info, sizeof(info)) != 0) {
+        perror("send_msg MSG_JOIN_ROOM_OK");
+    }
 
 	printf("Gry dostępne na serwerze po dołączeniu nowego gracza:\n");
 
@@ -549,16 +567,33 @@ void handle_create_room(std::shared_ptr<Client> client) {
 
     printf("Utworzono grę id=%d owner=%s\n",game.id, game.owner);
 
-    // Powiadom twórcę 
-	printf("Wysyłam CREATE_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
-    if (send_msg(client->fd, MSG_CREATE_GAME_OK, nullptr, 0) != 0) {
-		perror("send_msg CREATE_GAME_OK");
-	}
+    // Powiadom twórcę - wyślij podstawowe info o pokoju
+    MsgRoomInfo info;
+    memset(&info, 0, sizeof(info));
+    info.game_id = game.id;
+    info.players_count = game.player_count;
+    strncpy(info.owner, game.owner, MAX_NICK_LEN - 1);
+    info.owner[MAX_NICK_LEN - 1] = '\0';
+    for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
+        int pfd = game.players[i];
+        auto cit = clients.find(pfd);
+        if (cit != clients.end()) {
+            strncpy(info.players[i], cit->second->nick, MAX_NICK_LEN - 1);
+            info.players[i][MAX_NICK_LEN - 1] = '\0';
+        } else {
+            info.players[i][0] = '\0';
+        }
+    }
 
-	// prześlij stan aktulany nowo stworzonej gry
-    if (send_msg(client->fd, MSG_JOIN_GAME_OK, &game, 0) != 0) {
-		perror("send_msg JOIN_GAME_OK");
-	}
+    printf("Wysyłam MSG_CREATE_ROOM_OK do %s (fd=%d)\n", client->nick, client->fd);
+    if (send_msg(client->fd, MSG_CREATE_ROOM_OK, &info, sizeof(info)) != 0) {
+        perror("send_msg MSG_CREATE_ROOM_OK");
+    }
+
+    // Potwierdź dołączenie do pokoju (creator) z tym samym payloadem
+    if (send_msg(client->fd, MSG_JOIN_ROOM_OK, &info, sizeof(info)) != 0) {
+        perror("send_msg MSG_JOIN_ROOM_OK");
+    }
 	
 	printf("Gry dostępne na serwerze:\n");
 

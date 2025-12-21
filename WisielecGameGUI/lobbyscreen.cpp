@@ -35,6 +35,14 @@ LobbyScreen::LobbyScreen(QWidget *parent)
     welcomeLabel->setFont(appFont);
     mainLayout->addWidget(welcomeLabel);
 
+    // Create Game button
+    createButton = new QPushButton("Create Game");
+    createButton->setFont(appFont);
+    createButton->setStyleSheet("QPushButton {background-color: lightblue}");
+    mainLayout->addWidget(createButton);
+
+    connect(createButton, &QPushButton::clicked, this, &LobbyScreen::createGame);
+
     //Scroll area withy all the games in the list
     scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
@@ -53,11 +61,6 @@ LobbyScreen::LobbyScreen(QWidget *parent)
 
 void LobbyScreen::set_login(const QString &login)
 {
-    // if (!login) return;
-
-    /*trncpy(login, loginText, sizeof(login));
-    login[sizeof(login) - 1] = '\0';*/
-
     welcomeLabel->setText(QString("Welcome to the game %1").arg(login));
 }
 

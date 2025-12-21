@@ -37,13 +37,25 @@ MainWindow::MainWindow(QWidget *parent)
     connect(lobbyScreen, &LobbyScreen::joinGame,
             controller, &GameController::joinGameRequested);
 
+    // LobbyScreen → Controller
+    connect(lobbyScreen, &LobbyScreen::createGame,
+            controller, &GameController::createGameRequested);
+
     // Controller → GUI
-    connect(controller, &GameController::loginAccepted, this, [&]() {
+    connect(controller, &GameController::loginAccepted, this, [&](const QString &login){
         stack->setCurrentWidget(lobbyScreen);
+        lobbyScreen->set_login(login);
+    });
+
+    // Show error and return to start screen when login rejected
+    connect(controller, &GameController::loginRejected, this, [&](const QString &reason){
+        stack->setCurrentWidget(startScreen);
+        startScreen->showLoginError(reason);
     });
 
     connect(controller, &GameController::lobbyStateUpdated,
             lobbyScreen, &LobbyScreen::display_games);
+
 
     connect(controller, &GameController::joinedGame,
             this, [&](int gameId,

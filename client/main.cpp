@@ -75,6 +75,22 @@ int main() {
 	client.onGuessLetterFail = [] {
 		std::cout << "Litera już odgadnięta lub nieprawidłowa\n";
 	};
+	client.onGameEnd = [] {
+		std::cout << "Gra zakończona\n";
+	};
+	client.onPlayerEliminated = [] {
+		std::cout << "Zostałeś wyeliminowany z gry!!!\n";
+	};
+	client.onWordGuessed = [] {
+		std::cout << "Gratulacje! Słowo zostało odgadnięte!\n";
+		std::cout << "Odgadujemy nowe słowo!\n";
+	};
+	client.onExitGameOk = [] {
+		std::cout << "Pomyślnie opuściłeś grę\n";
+	};
+	client.onExitGameFail = [] {
+		std::cout << "Nie można opuścić gry\n";
+	};
 
     // --- start ---
     if (!client.connectToServer("127.0.0.1", 12345)) {
@@ -93,7 +109,7 @@ int main() {
     // --- pętla UI (TYLKO UI!) ---
     while (true) {
         char c;
-		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter: ";
+		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game: ";
         std::cin >> c;
 
         if (c == 'c') {
@@ -135,6 +151,10 @@ int main() {
 			std::cout << "Litera do odgadnięcia: ";
 			std::cin >> letter;
 			client.guessLetter(letter);
+		}
+		else if (c == 'e') {
+			std::cout << "Opuszczanie gry...\n";
+			client.exitGame();
 		}
 	}
 

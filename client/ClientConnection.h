@@ -19,8 +19,13 @@ public:
     std::function<void()> onJoinRoomOk;
 	std::function<void()> onJoinRoomFail;
     std::function<void()> onStartGameOk;
-    std::function<void()> onGuessLetterOk;
+	std::function<void()> onGameEnd;
+	std::function<void()> onExitGameOk;
+	std::function<void()> onExitGameFail;
+    std::function<void()> onGuessLetterOk;	
 	std::function<void()> onGuessLetterFail;
+	std::function<void()> onPlayerEliminated;
+	std::function<void()> onWordGuessed;
 	std::function<void(const MsgGameState&)> onGameState;
     std::function<void()> onStartGameFail;
     std::function<void(const std::string&)> onError;
@@ -39,6 +44,7 @@ public:
     void joinRoom(uint32_t roomId);
 	void startGame(uint32_t roomId);
 	void guessLetter(char letter);
+	void exitGame();
 
 private:
     int sock = -1;

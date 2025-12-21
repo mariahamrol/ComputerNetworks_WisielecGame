@@ -7,7 +7,7 @@
 #define MAX_NICK_LEN 32
 #define MAX_WORD_LEN 64
 #define MAX_GAMES 32
-#define MAX_LIVES 8
+#define MAX_LIVES 2
 #define ALPHABET_SIZE 32
 
 

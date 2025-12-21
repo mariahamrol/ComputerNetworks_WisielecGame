@@ -6,7 +6,7 @@
 static int write_all(int fd, const void* buf, size_t len) {
     const char* p = static_cast<const char*>(buf);
     while (len > 0) {
-        ssize_t n = send(fd, p, len, 0);
+        ssize_t n = send(fd, p, len, MSG_NOSIGNAL);
         if (n < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
@@ -21,7 +21,7 @@ static int write_all(int fd, const void* buf, size_t len) {
 static int read_all(int fd, void* buf, size_t len) {
     char* p = static_cast<char*>(buf);
     while (len > 0) {
-        ssize_t n = recv(fd, p, len, 0);
+        ssize_t n = recv(fd, p, len, MSG_NOSIGNAL);
         if (n == 0) return 0;
         if (n < 0) {
             if (errno == EINTR) continue;

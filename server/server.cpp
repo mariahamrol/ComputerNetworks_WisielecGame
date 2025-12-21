@@ -9,31 +9,42 @@
 
 #include <map>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #include <cstring>
 #include <algorithm>
+#include <random>
 
-#include "../common/protocol.h"
-#include "../common/messages.h"
-#include "../common/net.hpp"
+#include "../include/protocol.h"
+#include "../include/messages.h"
+#include "../include/net.hpp"
+#include "../include/wordlist.h"
 #include "../client/client.h"
 #include "game.h"
 
 #define MAX_EVENTS 128
 
+static uint32_t next_game_id = 1;
+
 // --- Global Server State ---
 std::map<int, std::shared_ptr<Client>> clients;
-std::vector<Game> games;
+std::unordered_map<uint32_t, Game> games;
 
 // --- Forward Declarations ---
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
-void handle_create_game(std::shared_ptr<Client> client);
+void handle_create_room(std::shared_ptr<Client> client);
 void disconnect_client(int cfd, int epoll_fd);
 void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* payload);
 void handle_client_data(std::shared_ptr<Client> client, int epoll_fd);
 void broadcast_lobby_state();
 void send_lobby_state(std::shared_ptr<Client> client);
-void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg);
+void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
+void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
+void create_game_word(Game& game);
+void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg);
+void brodcast_game_state(Game& game);
+void delete_game(Game& game);
+Game* find_game_by_id(uint32_t game_id);
 
 static void set_non_blocking(int fd) {
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
@@ -108,7 +119,7 @@ int main() {
                     set_non_blocking(cfd);
                     auto client = std::make_shared<Client>();
                     client->fd = cfd;
-                    client->active = 1;
+                    client->is_active = 1;
                     client->state = STATE_CONNECTED;
                     client->game_id = -1;
                     memset(client->nick, 0, sizeof(client->nick));
@@ -202,11 +213,17 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
         case MSG_LOGIN_REQ:
             handle_login(client, (MsgLoginReq*)payload);
             break;
-		case MSG_CREATE_GAME_REQ:
-			handle_create_game(client);
+		case MSG_CREATE_ROOM_REQ:
+			handle_create_room(client);
 			break;
-		case MSG_JOIN_GAME_REQ:
-			handle_join_game(client, (MsgJoinGameReq*)payload);
+		case MSG_JOIN_ROOM_REQ:
+			handle_join_room(client, (MsgGameIdReq*)payload);
+			break;
+		case MSG_START_GAME_REQ:
+			handle_start_game(client, (MsgGameIdReq*)payload);
+			break;
+		case  MSG_GUESS_LETTER_REQ:
+			handle_guess_letter(client, (MsgGuessLetterReq*)payload);
 			break;
 
         default:
@@ -214,7 +231,152 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
             break;
     }
 }
-void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg) {
+
+void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg) {
+	if (client->state != STATE_IN_GAME || !client->is_active || client->lives <= 0){
+		printf("Nieautoryzowana próba odgadnięcia litery przez %s, state=%d, is_active=%d, lives=%d\n", client->nick, client->state, client->is_active, client->lives);
+		if(send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0) != 0) {
+			perror("send_msg GUESS_LETTER_FAIL");
+		}
+		return;
+	}
+	Game* game = find_game_by_id(client->game_id);
+	if (game == nullptr || !game->active) {
+		printf("Nieprawidłowa próba odgadnięcia litery przez %s w grze id=%d\n", client->nick, client->game_id);
+		if(send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0) != 0) {
+			perror("send_msg GUESS_LETTER_FAIL");
+		}
+		return;
+	}
+	const char letter = msg->letter; 
+	printf("Gracz %s próbuje odgadnąć literę '%c' w grze id=%d\n", client->nick, letter, client->game_id);
+	bool already_guessed = false;
+	for (int i = 0; i < ALPHABET_SIZE; i++) {
+		if (client->guessed_letters[i] == letter || game->guessed_letters[i] == letter) {
+			already_guessed = true;
+			break;
+		}
+	}
+	if (already_guessed) {
+		printf("Litera %c już odgadnięta przez %s w grze id=%d\n", letter, client->nick, client->game_id);
+		if(send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0) != 0) {
+			perror("send_msg GUESS_LETTER_FAIL");
+		}
+		return;
+	}
+
+	uint8_t correct = 0;
+	uint8_t count = 0;
+	for (int i = 0; i < game->word_length; ++i) {
+		if (game->word[i] == letter) {
+			game->word_guessed[i] = letter;
+			count++;
+			correct = 1;
+		}
+	}
+
+	if (correct == 0) {
+		client->lives--;
+	}
+	if (count > 0) {
+		client->points += count * 10;
+	}
+
+	for (int i = 0; i < ALPHABET_SIZE; i++) {
+        if (game->guessed_letters[i] == 0 && correct) {
+            game->guessed_letters[i] = letter;
+            break;
+        }
+    }
+
+	for (int i = 0; i < ALPHABET_SIZE; i++) {
+        if (client->guessed_letters[i] == 0) {
+            client->guessed_letters[i] = letter;
+            break;
+        }
+    }
+
+	if (send_msg(client->fd, MSG_GUESS_LETTER_OK, &correct, sizeof(correct)) != 0) {
+        perror("send_msg GUESS_LETTER_OK");
+    }
+
+	brodcast_game_state(*game);
+}
+
+Game* find_game_by_id(uint32_t game_id) {
+    auto it = games.find(game_id);
+    if (it == games.end())
+        return nullptr;
+    return &it->second;
+}
+
+void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
+	if (client->state != STATE_IN_ROOM || !client->is_owner) {
+		printf("Nieautoryzowana próba rozpoczęcia gry przez %s, state=%d, is_owner=%d\n", client->nick, client->state, client->is_owner);
+		if (send_msg(client->fd, MSG_START_GAME_FAIL, nullptr, 0) != 0) {
+			perror("send_msg START_GAME_FAIL");
+		}
+		return;
+	}
+
+	Game* game = find_game_by_id(msg->game_id);
+
+	if (game == nullptr || game->active || game->player_count < 2) { // Gra nie istnieje lub już rozpoczęta lub za mało graczy
+		printf("Nieprawidłowa próba rozpoczęcia gry id=%d przez %s. Game active=%d, player_count=%d\n", msg->game_id, client->nick, game->active, game->player_count);
+		if (send_msg(client->fd, MSG_START_GAME_FAIL, nullptr, 0) != 0) {
+			perror("send_msg START_GAME_FAIL");
+		}
+		return;
+	}
+
+	// Start gry
+	game->active = 1;
+	printf("Gra id=%d rozpoczęta przez %s\n", game->id, client->nick);
+
+	// Inicjalizacja rundy gry
+
+	create_game_word(*game);
+
+	memset(game->guessed_letters, 0, ALPHABET_SIZE);
+
+	for (int i = 0; i < game->word_length; ++i) {
+		game->word_guessed[i] = '_'; // Na początku żadna litera nie jest odgadnięta
+	}
+
+	// Powiadom graczy o rozpoczęciu gry
+	for (int i = 0; i < game->player_count; ++i) {
+		int pfd = game->players[i];
+		auto it = clients.find(pfd);
+		if (it == clients.end())
+			return;// Already disconnected
+		auto client = it->second;
+		client->state = STATE_IN_GAME; 
+		memset(client->guessed_letters, 0, ALPHABET_SIZE);
+		if (send_msg(pfd, MSG_START_GAME_OK, nullptr, 0) != 0) {
+			perror("send_msg START_GAME_OK");
+		}
+	}
+	
+	brodcast_game_state(*game);
+}
+
+
+
+
+void create_game_word(Game& game) {
+	printf("Tworzenie słowa do gry id=%d\n", game.id);
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> dist(0, WORD_LIST_SIZE - 1);
+
+    std::strncpy(game.word, WORD_LIST[dist(rng)], sizeof(game.word) - 1);
+    game.word_length = static_cast<uint8_t>(strlen(game.word));
+
+    for (int i = 0; i < game.word_length; ++i) {
+        game.word_guessed[i] = '_';
+    }
+}
+
+void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	if (client->state != STATE_LOBBY) {
 		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
 			perror("send_msg JOIN_GAME_FAIL");
@@ -222,10 +384,9 @@ void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg) {
 		return;
 	}
 
-	auto it = std::find_if(games.begin(), games.end(),
-		[msg](const Game& g) { return g.id == msg->game_id; });
+	Game* game = find_game_by_id(msg->game_id);
 
-	if (it == games.end() || it->player_count >= MAX_PLAYERS) {
+	if (game == nullptr || game->player_count >= MAX_PLAYERS) {
 		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
 			perror("send_msg JOIN_GAME_FAIL");
 		}
@@ -233,29 +394,27 @@ void handle_join_game(std::shared_ptr<Client> client, MsgJoinGameReq *msg) {
 	}
 
 	// Dodaj gracza do gry
-	it->players[it->player_count] = client->fd;
-	it->player_count++;
-
-	client->game_id = it->id;
+	game->players[game->player_count] = client->fd;
+	game->player_count++;
+	client->game_id = game->id;
 	client->is_owner = 0;
-	client->state = STATE_IN_GAME;
+	client->lives = MAX_LIVES;
+	client->points = 0;
+	memset(client->guessed_letters, 0, ALPHABET_SIZE);
+	client->state = STATE_IN_ROOM;
 
-	printf("Klient %s dołączył do gry id=%d\n", client->nick, it->id);
+	printf("Klient %s dołączył do gry id=%d\n", client->nick, game->id);
 
 	// Powiadom gracza
-	if (send_msg(client->fd, MSG_JOIN_GAME_OK, &(*it), 0) != 0) {
+	if (send_msg(client->fd, MSG_JOIN_GAME_OK, game, 0) != 0) {
 		perror("send_msg JOIN_GAME_OK");
 	}
 
 	printf("Gry dostępne na serwerze po dołączeniu nowego gracza:\n");
 
-    int gc = 0;
-    for (const auto& game : games) {
-        if (gc >= MAX_GAMES)
-            break;
+	for (const auto& [id, game] : games) {
 		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
-        gc++;
-    }
+	}
 
 	broadcast_lobby_state();
 }
@@ -283,11 +442,8 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 		}
 	}
 
-	
-
     if (nick_taken) {
         send_msg(client->fd, MSG_LOGIN_TAKEN, nullptr, 0);
-        client->state = STATE_CONNECTED;
         return;
     }
     
@@ -299,11 +455,46 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
     printf("Klient zalogowany: %s (fd=%d)\n", client->nick, client->fd);
 }
 
+void delete_game(uint32_t game_id) {
+	auto it = games.find(game_id);
+	if (it != games.end()) {
+		it->second.active = 0;
+		brodcast_game_state(it->second);
+		games.erase(it);
+		printf("Gra id=%d zakończona i usunięta\n", game_id);
+	}
+}
 
 void disconnect_client(int cfd, int epoll_fd) {
-    if (clients.find(cfd) == clients.end()) {
-        return; // Already disconnected
-    }
+	auto it = clients.find(cfd);
+    if (it == clients.end())
+        return;// Already disconnected
+
+    auto client = it->second;
+
+	// Usuń klienta z gry, jeśli jest w jakiejś
+	if( client->game_id != -1) {
+		Game* game = find_game_by_id(client->game_id);
+		if (game != nullptr) {
+
+
+			// Usuń klienta z listy graczy
+			auto& players = game->players;
+			auto it = std::find(players, players + game->player_count, cfd);
+			if (it != players + game->player_count) {
+				std::rotate(it, it + 1, players + game->player_count);
+				game->player_count--;
+			}
+			
+
+			// Jeśli klient był właścicielem gry, usuń grę i powiadom innych graczy
+			if (client->is_owner) {
+				delete_game(game->id);
+				// TODO powiadom innych graczy o zakończeniu gry
+			}
+		}
+	}
+
 	// TODO  IF Client is_owner remove game and notify players
 
     if (epoll_fd > 0) {
@@ -316,7 +507,8 @@ void disconnect_client(int cfd, int epoll_fd) {
     printf("Klient usunięty (fd=%d)\n", cfd);
 }
 
-void handle_create_game(std::shared_ptr<Client> client) {
+void handle_create_room(std::shared_ptr<Client> client) {
+	printf("Obsługa CREATE_ROOM_REQ od %s (fd=%d)\n", client->nick, client->fd);
     if (client->state != STATE_LOBBY) {
 		if (send_msg(client->fd, MSG_CREATE_GAME_FAIL, nullptr, 0) != 0) {
 			perror("send_msg CREATE_GAME_FAIL");
@@ -328,7 +520,8 @@ void handle_create_game(std::shared_ptr<Client> client) {
     memset(&game, 0, sizeof(Game));
 
     // ID gry
-    game.id = games.empty() ? 1 : games.back().id + 1;
+	game.id = next_game_id++;
+	
 
     // Owner
     strncpy(game.owner, client->nick, sizeof(game.owner) - 1);
@@ -338,19 +531,21 @@ void handle_create_game(std::shared_ptr<Client> client) {
     game.player_count = 1;
 
     // Stan gry
-    game.started = 0;
+    game.active = 0;
 
-    // Reset guessed
-    memset(game.guessed, 0, sizeof(game.guessed));
 
     // Słowo (na razie puste)
     memset(game.word, 0, sizeof(game.word));
 
-    games.push_back(game);
+
+    games.emplace(game.id, game);
 
     client->game_id = game.id;
 	client->is_owner = 1;
-	client->state = STATE_IN_GAME;
+	client->lives = MAX_LIVES;
+	client->points = 0;
+	memset(client->guessed_letters, 0, ALPHABET_SIZE);
+	client->state = STATE_IN_ROOM;
 
     printf("Utworzono grę id=%d owner=%s\n",game.id, game.owner);
 
@@ -367,13 +562,9 @@ void handle_create_game(std::shared_ptr<Client> client) {
 	
 	printf("Gry dostępne na serwerze:\n");
 
-    int gc = 0;
-    for (const auto& game : games) {
-        if (gc >= MAX_GAMES)
-            break;
+	for (const auto& [id, game] : games) {
 		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
-        gc++;
-    }
+	}
 
 	broadcast_lobby_state();
 }
@@ -384,14 +575,14 @@ void send_lobby_state(std::shared_ptr<Client> client) {
 
     msg.games_count = 0;
 
-    for (const auto& game : games) {
-        if (msg.games_count >= MAX_GAMES)
-            break;
+	for (const auto& [id, game] : games) {
+		if (msg.games_count >= MAX_GAMES)
+			break;
 
-        msg.games[msg.games_count].game_id = game.id;
-        msg.games[msg.games_count].players_count = game.player_count;
-        msg.games_count++;
-    }
+		msg.games[msg.games_count].game_id = game.id;
+		msg.games[msg.games_count].players_count = game.player_count;
+		msg.games_count++;
+	}
 
     send_msg(client->fd, MSG_LOBBY_STATE, &msg, sizeof(msg));
 }
@@ -400,6 +591,48 @@ void broadcast_lobby_state() { // TODO tylko jak gracz jest w lobby
     for (auto& [fd, other] : clients) {
         if (other->state == STATE_LOBBY) {
             send_lobby_state(other);
+        }
+    }
+}
+
+void brodcast_game_state(Game& game) {
+    MsgGameState game_state;
+    memset(&game_state, 0, sizeof(MsgGameState));
+    
+    game_state.game_id = game.id;
+    game_state.word_length = game.word_length;
+    game_state.player_count = game.player_count;
+
+    memcpy(game_state.word, game.word_guessed, MAX_WORD_LEN);
+    memcpy(game_state.guessed_letters, game.guessed_letters, ALPHABET_SIZE);
+
+    printf("Wysyłam game_state.word: %s, dla %s\n", game_state.word, game.word);
+    printf("Wysyłam game_state.guessed_letters: %s\n", game_state.guessed_letters);
+
+    // Gracze
+    for (int i = 0; i < game.player_count; ++i) {
+        int pfd = game.players[i];
+        auto cit = clients.find(pfd);
+        if (cit != clients.end()) {
+            auto& c = cit->second;
+            NetPlayerState& ps = game_state.players[i];
+            strncpy(ps.nick, c->nick, MAX_NICK_LEN - 1);
+            ps.lives = c->lives;
+            ps.points = c->points;
+            memcpy(ps.guessed_letters, c->guessed_letters, ALPHABET_SIZE);
+            ps.is_owner = c->is_owner;
+            ps.is_active = c->is_active;
+        }
+    }
+
+    // Wysyłanie do wszystkich graczy
+    for (int i = 0; i < game.player_count; ++i) {
+        int pfd = game.players[i];
+        auto it = clients.find(pfd);
+        if (it != clients.end()) {
+            if (send_msg(pfd, MSG_GAME_STATE, &game_state, sizeof(game_state)) != 0) {
+                perror("send_msg GAME_STATE");
+            }
         }
     }
 }

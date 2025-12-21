@@ -2,10 +2,16 @@
 #define MESSAGES_H
 
 #include <stdint.h>
+#include "../client/client.h"
 
 #define MAX_NICK_LEN 32
 #define MAX_WORD_LEN 64
 #define MAX_GAMES 32
+#define MAX_LIVES 8
+#define ALPHABET_SIZE 32
+
+
+
 
 typedef struct {
     char nick[MAX_NICK_LEN];
@@ -13,7 +19,7 @@ typedef struct {
 
 typedef struct {
     uint32_t game_id;
-} MsgJoinGameReq;
+}  MsgGameIdReq;
 
 typedef struct {
     char letter;
@@ -39,20 +45,23 @@ typedef struct {
 
 typedef struct {
     char nick[MAX_NICK_LEN];
+	char guessed_letters[ALPHABET_SIZE];
+	int is_owner;
+    bool is_active;
     uint8_t lives;
     uint16_t points;
-} PlayerState;
+} NetPlayerState;
+
 
 typedef struct {
-    uint8_t player_count;
-    PlayerState players[];
+	uint32_t game_id;
+	char word[MAX_WORD_LEN];
+	char guessed_letters[ALPHABET_SIZE];
+    uint8_t word_length;
+	uint8_t player_count;
+    NetPlayerState players[8];
 } MsgGameState;
 
-typedef struct {
-    char letter;
-    uint8_t correct;
-    uint8_t count;
-    uint8_t positions[];
-} MsgGuessResult;
+
 
 #endif

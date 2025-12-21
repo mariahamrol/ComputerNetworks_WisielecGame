@@ -1,5 +1,5 @@
 #include "ClientConnection.h"
-#include "../common/net.hpp"
+#include "../include/net.hpp"
 
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -15,6 +15,11 @@ std::optional<MsgLobbyState> ClientConnection::getLastLobbyState() {
     std::lock_guard<std::mutex> lock(lobbyMutex);
     return lastLobbyState;
 }
+std::optional<MsgGameState> ClientConnection::getLastGameState() {
+    std::lock_guard<std::mutex> lock(gameStateMutex);
+    return lastGameState;
+}
+
 
 bool ClientConnection::connectToServer(const std::string& ip, int port) {
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -52,13 +57,21 @@ void ClientConnection::login(const std::string& nick) {
     send_msg(sock, MSG_LOGIN_REQ, &req, sizeof(req));
 }
 
-void ClientConnection::createGame() {
-    send_msg(sock, MSG_CREATE_GAME_REQ, nullptr, 0);
+void ClientConnection::createRoom() {
+    send_msg(sock, MSG_CREATE_ROOM_REQ, nullptr, 0);
 }
 
-void ClientConnection::joinGame(uint32_t id) {
-    MsgJoinGameReq req{ id };
-    send_msg(sock, MSG_JOIN_GAME_REQ, &req, sizeof(req));
+void ClientConnection::joinRoom(uint32_t id) {
+    MsgGameIdReq req{ id };
+    send_msg(sock, MSG_JOIN_ROOM_REQ, &req, sizeof(req));
+}
+void ClientConnection::startGame(uint32_t id) {
+	MsgGameIdReq req{ id };
+	send_msg(sock, MSG_START_GAME_REQ, &req, sizeof(req));
+}
+void ClientConnection::guessLetter(char letter) {
+	MsgGuessLetterReq req{ letter };
+	send_msg(sock, MSG_GUESS_LETTER_REQ, &req, sizeof(req));
 }
 
 void ClientConnection::recvLoop() {
@@ -78,6 +91,16 @@ void ClientConnection::recvLoop() {
 
 void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
     switch (hdr.type) {
+		case MSG_GAME_STATE: {
+			MsgGameState copy = *(MsgGameState*)payload;
+			{
+				std::lock_guard<std::mutex> lock(gameStateMutex);
+				lastGameState = copy;
+			}
+			if (onGameState)
+				onGameState(copy);
+			break;
+		}
         case MSG_LOGIN_OK:
             if (onLoginOk) onLoginOk();
             break;
@@ -94,13 +117,31 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 				onLobbyState(copy);
 			break;
 		}
-        case MSG_CREATE_GAME_OK:
-            if (onCreateGameOk) onCreateGameOk();
+        case MSG_CREATE_ROOM_OK:
+            if (onCreateRoomOk) onCreateRoomOk();
             break;
-        case MSG_JOIN_GAME_OK:
-            if (onJoinGameOk) onJoinGameOk();
+        case MSG_JOIN_ROOM_OK:
+            if (onJoinRoomOk) onJoinRoomOk();
             break;
+		case MSG_JOIN_ROOM_FAIL:
+			if (onJoinRoomFail) onJoinRoomFail();
+			// Można dodać obsługę błędu dołączenia do pokoju
+			break;
+		case MSG_START_GAME_OK:
+			if (onStartGameOk) onStartGameOk();
+			break;
+		case MSG_START_GAME_FAIL:
+			if (onStartGameFail) onStartGameFail();
+			break;
+		case MSG_GUESS_LETTER_OK:
+			if (onGuessLetterOk) onGuessLetterOk();
+			break;
+		case MSG_GUESS_LETTER_FAIL:
+			if (onGuessLetterFail) onGuessLetterFail();
+			break;
+
         default:
-            break;
+			// Nieznany typ wiadomości
+			break;
     }
 }

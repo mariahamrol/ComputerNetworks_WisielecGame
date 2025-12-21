@@ -23,10 +23,58 @@ int main() {
                       << " graczy)\n";
         }
     };
+	client.onGameState = [](const MsgGameState& msg) {
+        std::cout << "=== Game State ===\n";
+		std::cout << "Gra ID: " << msg.game_id << "\n";
+		std::cout << "Słowo: ";
+		for (int i = 0; i < msg.word_length; ++i) {
+			if (msg.word[i]) {
+				std::cout << msg.word[i] << " ";
+			} else {
+				std::cout << "* ";
+			}
+		}
+		for (int i = 0; i < msg.player_count; ++i) {
+			const NetPlayerState& p = msg.players[i];
+			std::cout << "\nGracz: " << p.nick
+					  << " Lives: " << (int)p.lives
+					  << " Points: " << p.points
+					  << " Active: " << (p.is_active ? "Yes" : "No")
+					  << " Owner: " << (p.is_owner ? "Yes" : "No")
+					  << " Guessed letters: ";
+			for (int j = 0; j < ALPHABET_SIZE; ++j) {
+				if (p.guessed_letters[j]) {
+					std::cout << p.guessed_letters[j] << " ";
+				}
+			}
+		}
+		
 
-    client.onCreateGameOk = [] {
-        std::cout << "Utworzono grę\n";
+        std::cout << "\n";
     };
+
+    client.onCreateRoomOk = [] {
+        std::cout << "Utworzono pokój\n";
+    };
+
+	client.onJoinRoomOk = [] {
+		std::cout << "Dołączono do pokoju\n";
+	};
+	client.onJoinRoomFail = [] {
+		std::cout << "Nie udało się dołączyć do pokoju\n";
+	};
+	client.onStartGameOk = [] {
+		std::cout << "Gra rozpoczęta\n";
+	};
+	client.onStartGameFail = [] {
+		std::cout << "Nie udało się rozpocząć gry\n";
+	};
+	client.onGuessLetterOk = [] {
+		std::cout << "Litera przeanalizowana poprawnie\n";
+	};
+	client.onGuessLetterFail = [] {
+		std::cout << "Litera już odgadnięta lub nieprawidłowa\n";
+	};
 
     // --- start ---
     if (!client.connectToServer("127.0.0.1", 12345)) {
@@ -45,11 +93,11 @@ int main() {
     // --- pętla UI (TYLKO UI!) ---
     while (true) {
         char c;
-		 std::cout << "c - crate game, q - quit, l - list games, j - join game: ";
+		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter: ";
         std::cin >> c;
 
         if (c == 'c') {
-            client.createGame();
+            client.createRoom();
         }
         if (c == 'q') {
             break;
@@ -71,12 +119,24 @@ int main() {
 			}
 		}
 		else if (c == 'j') {
-			uint32_t gameId;
-			std::cout << "ID gry do dołączenia: ";
-			std::cin >> gameId;
-			client.joinGame(gameId);
+			uint32_t roomId;
+			std::cout << "ID pokoju do dołączenia: ";
+			std::cin >> roomId;
+			client.joinRoom(roomId);
 		}
-    }
+		else if (c == 's') {
+			uint32_t roomId;
+			std::cout << "ID pokoju do rozpoczęcia: ";
+			std::cin >> roomId;
+			client.startGame(roomId);	
+		}
+		else if (c == 'g') {
+			char letter;
+			std::cout << "Litera do odgadnięcia: ";
+			std::cin >> letter;
+			client.guessLetter(letter);
+		}
+	}
 
     client.disconnect();
 }

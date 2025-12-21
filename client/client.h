@@ -2,17 +2,21 @@
 #define SERVER_CLIENT_H
 
 #include <vector>
-#include "../common/states.h"
-#include "../common/messages.h"
+#include <array>
+#include "../include/states.h"
 
-
+#define ALPHABET_SIZE 32
+#define MAX_NICK_LEN 32
 struct Client {
     int fd;
     ClientState state;
     char nick[MAX_NICK_LEN];
     int game_id;
 	int is_owner;
-    int active;
+    int is_active;
+	char guessed_letters[ALPHABET_SIZE];
+	uint8_t lives;
+    uint16_t points;
     std::vector<char> buffer;
 };
 

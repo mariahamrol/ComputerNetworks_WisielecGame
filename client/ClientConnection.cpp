@@ -76,6 +76,9 @@ void ClientConnection::guessLetter(char letter) {
 void ClientConnection::exitGame() {
 	send_msg(sock, MSG_EXIT_GAME_REQ, nullptr, 0);
 }
+void ClientConnection::exitRoom() {
+	send_msg(sock, MSG_EXIT_ROOM_REQ, nullptr, 0);
+}
 
 void ClientConnection::recvLoop() {
     char buffer[4096];
@@ -159,6 +162,12 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_SERVER_SHUTDOWN:
 			if (onError) onError("Server is shutting down");
 			running = false;
+			break;
+		case MSG_EXIT_ROOM_OK:
+			if (onExitRoomOk) onExitRoomOk();
+			break;
+		case MSG_EXIT_ROOM_FAIL:
+			if (onExitRoomFail) onExitRoomFail();
 			break;
         default:
 			// Nieznany typ wiadomości

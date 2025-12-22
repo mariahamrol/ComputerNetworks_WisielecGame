@@ -93,6 +93,12 @@ int main() {
 	client.onExitGameFail = [] {
 		std::cout << "Nie można opuścić gry\n";
 	};
+	client.onExitRoomOk = [] {
+		std::cout << "Pomyślnie opuściłeś pokj\n";
+	};
+	client.onExitRoomFail = [] {
+		std::cout << "Nie można opuścić pokoju\n";
+	};
 	client.onError = [](const std::string& msg) {
 		std::cout << msg << "\n";
 	};
@@ -114,7 +120,7 @@ int main() {
     // --- pętla UI (TYLKO UI!) ---
     while (true) {
         char c;
-		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game: ";
+		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game. d - exit room: ";
         std::cin >> c;
 
         if (c == 'c') {
@@ -160,6 +166,10 @@ int main() {
 		else if (c == 'e') {
 			std::cout << "Opuszczanie gry...\n";
 			client.exitGame();
+		}
+		else if (c == 'd') {
+			std::cout << "Opuszczanie pokoju...\n";
+			client.exitRoom();
 		}
 	}
 

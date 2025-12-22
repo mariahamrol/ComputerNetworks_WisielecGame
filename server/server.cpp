@@ -45,10 +45,12 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void create_game_word(Game& game);
 void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg);
 void brodcast_game_state(Game& game);
+void delete_player_from_game(std::shared_ptr<Client> client);
 void delete_game(uint32_t game_id);
 void start_new_turn(Game& game);
 void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload = nullptr, uint16_t length = 0);
 void user_exit_game(std::shared_ptr<Client> client);
+void user_exit_room(std::shared_ptr<Client> client);
 void handle_shutdown(int sig);
 void graceful_shutdown();
 Game* find_game_by_id(uint32_t game_id);
@@ -239,6 +241,9 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 		case MSG_EXIT_GAME_REQ:
 			user_exit_game(client);
 			break;
+		case MSG_EXIT_ROOM_REQ:
+		 	user_exit_room(client);
+			break;
         default:
             printf("Nieznany typ wiadomości %d (fd=%d)\n", hdr.type, client->fd);
             break;
@@ -336,7 +341,7 @@ void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg
 		}
 	}
 	if (active_players < 2) {
-		printf("Tura gry id=%d zakończona! Za mało aktywnych graczy (%d)\n", game->id, active_players);
+		printf("Gra id=%d zakończona! Za mało aktywnych graczy (%d)\n", game->id, active_players);
 		delete_game(game->id);
 		return;
 	}
@@ -563,6 +568,16 @@ void delete_game(uint32_t game_id) {
 		printf("Gra id=%d zakończona i usunięta\n", game_id);
 	}
 }
+void user_exit_room(std::shared_ptr<Client> client) {	
+	if (client->game_id == -1 || client->state != STATE_IN_ROOM) {
+		printf("Klient %s próbuje opuścić pokj, ale nie jest w zadnym pokoju\n", client->nick);
+		if (send_msg(client->fd, MSG_EXIT_ROOM_FAIL, nullptr, 0) != 0) {
+			perror("send_msg EXIT_ROOM_FAIL");
+		}
+		return;
+	}
+	delete_player_from_game(client);
+}
 
 void user_exit_game(std::shared_ptr<Client> client) {
 	if (client->game_id == -1) {
@@ -572,6 +587,16 @@ void user_exit_game(std::shared_ptr<Client> client) {
 		}
 		return;
 	}
+
+	delete_player_from_game(client);
+
+	if (send_msg(client->fd, MSG_EXIT_GAME_OK, nullptr, 0) != 0) {
+		printf("błąd przy wysyłaniu EXIT_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
+		perror("send_msg EXIT_GAME_OK");
+	}
+}
+
+void delete_player_from_game(std::shared_ptr<Client> client){
 	Game* game = find_game_by_id(client->game_id);
 	if (game == nullptr) {
 		printf("Klient %s opuszcza grę id=%d\n", client->nick, game->id);
@@ -580,11 +605,9 @@ void user_exit_game(std::shared_ptr<Client> client) {
 		}
 		return;
 	}
-	// Jeśli klient był właścicielem gry, usuń grę i powiadom innych graczy
 	if (client->is_owner) {
 		delete_game(game->id);
 	} else {
-		// Usuń klienta z listy graczy
 		auto& players = game->players;
 		auto it = std::find(players, players + game->player_count, client->fd);
 		if (it != players + game->player_count) {
@@ -599,11 +622,15 @@ void user_exit_game(std::shared_ptr<Client> client) {
 	client->lives = 0;
 	client->points = 0;
 	memset(client->guessed_letters, 0, ALPHABET_SIZE);
-	if (send_msg(client->fd, MSG_EXIT_GAME_OK, nullptr, 0) != 0) {
-		printf("błąd przy wysyłaniu EXIT_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
-		perror("send_msg EXIT_GAME_OK");
+
+	if (game->player_count < 2) {
+		delete_game(game->id);
 	}
-	printf("Klient %s opuścił grę id=%d\n", client->nick, game->id);
+
+	for (const auto& [id, game] : games) {
+		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
+	}
+
 }
 
 void disconnect_client(int cfd, int epoll_fd) {
@@ -615,25 +642,8 @@ void disconnect_client(int cfd, int epoll_fd) {
 
 	// Usuń klienta z gry, jeśli jest w jakiejś
 	if( client->game_id != -1) {
-		Game* game = find_game_by_id(client->game_id);
-		if (game != nullptr) {
-			// Jeśli klient był właścicielem gry, usuń grę i powiadom innych graczy
-			if (client->is_owner) {
-				delete_game(game->id);
-			} else {
-				// Usuń klienta z listy graczy
-				auto& players = game->players;
-				auto it = std::find(players, players + game->player_count, cfd);
-				if (it != players + game->player_count) {
-					std::rotate(it, it + 1, players + game->player_count);
-					game->player_count--;
-				}
-			}
-
-		}
+		delete_player_from_game(client);
 	}
-
-	// TODO  IF Client is_owner remove game and notify players
 
     if (epoll_fd > 0) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cfd, nullptr);

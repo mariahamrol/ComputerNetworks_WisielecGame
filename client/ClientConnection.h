@@ -22,6 +22,8 @@ public:
 	std::function<void()> onGameEnd;
 	std::function<void()> onExitGameOk;
 	std::function<void()> onExitGameFail;
+	std::function<void()> onExitRoomOk;
+	std::function<void()> onExitRoomFail;
     std::function<void()> onGuessLetterOk;	
 	std::function<void()> onGuessLetterFail;
 	std::function<void()> onPlayerEliminated;
@@ -46,6 +48,7 @@ public:
 	void startGame(uint32_t roomId);
 	void guessLetter(char letter);
 	void exitGame();
+	void exitRoom();
 
 private:
     int sock = -1;

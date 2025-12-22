@@ -26,6 +26,7 @@ public:
 	std::function<void()> onGuessLetterFail;
 	std::function<void()> onPlayerEliminated;
 	std::function<void()> onWordGuessed;
+	std::function<void()> onServerShutdown;
 	std::function<void(const MsgGameState&)> onGameState;
     std::function<void()> onStartGameFail;
     std::function<void(const std::string&)> onError;

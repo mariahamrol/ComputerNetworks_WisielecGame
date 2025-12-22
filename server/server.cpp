@@ -26,6 +26,7 @@
 #define MAX_EVENTS 128
 
 static uint32_t next_game_id = 1;
+volatile sig_atomic_t server_running = 1;
 
 // --- Global Server State ---
 std::map<int, std::shared_ptr<Client>> clients;
@@ -48,6 +49,8 @@ void delete_game(uint32_t game_id);
 void start_new_turn(Game& game);
 void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload = nullptr, uint16_t length = 0);
 void user_exit_game(std::shared_ptr<Client> client);
+void handle_shutdown(int sig);
+void graceful_shutdown();
 Game* find_game_by_id(uint32_t game_id);
 
 static void set_non_blocking(int fd) {
@@ -56,6 +59,8 @@ static void set_non_blocking(int fd) {
 
 int main() {
 	signal(SIGPIPE, SIG_IGN);
+	signal(SIGINT, handle_shutdown); 
+	signal(SIGTERM, handle_shutdown); 
     int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sfd < 0) {
         perror("socket");
@@ -103,7 +108,7 @@ int main() {
 
     epoll_event events[MAX_EVENTS];
 
-    while (true) {
+    while (server_running) {
         int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         if (n_events < 0) {
             perror("epoll_wait");
@@ -113,7 +118,7 @@ int main() {
         for (int i = 0; i < n_events; ++i) {
             if (events[i].data.fd == sfd) {
                 // New connection
-                while (true) {
+                while (server_running) {
                     int cfd = accept(sfd, nullptr, nullptr);
                     if (cfd < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break; // No more incoming connections
@@ -156,6 +161,7 @@ int main() {
         }
     }
 
+	graceful_shutdown();
     close(sfd);
     close(epoll_fd);
     return 0;
@@ -183,7 +189,7 @@ void handle_client_data(std::shared_ptr<Client> client, int epoll_fd) {
 
     client->buffer.insert(client->buffer.end(), read_buffer, read_buffer + bytes_read);
 
-    while (true) {
+    while (server_running) {
         if (client->buffer.size() < sizeof(MsgHeader)) {
             break; // Not enough data for a header
         }
@@ -384,6 +390,7 @@ Game* find_game_by_id(uint32_t game_id) {
 }
 
 void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
+	printf("Gracz %s próbuje rozpocząć grę id=%d\n", client->nick, msg->game_id);
 	if (client->state != STATE_IN_ROOM || !client->is_owner) {
 		printf("Nieautoryzowana próba rozpoczęcia gry przez %s, state=%d, is_owner=%d\n", client->nick, client->state, client->is_owner);
 		if (send_msg(client->fd, MSG_START_GAME_FAIL, nullptr, 0) != 0) {
@@ -424,6 +431,9 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 			return;// Already disconnected
 		auto client = it->second;
 		client->state = STATE_IN_GAME; 
+		client->is_active = 1;
+		client->lives = MAX_LIVES;
+		client->points = 0;
 		memset(client->guessed_letters, 0, ALPHABET_SIZE);
 		if (send_msg(pfd, MSG_START_GAME_OK, nullptr, 0) != 0) {
 			perror("send_msg START_GAME_OK");
@@ -452,17 +462,17 @@ void create_game_word(Game& game) {
 
 void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	if (client->state != STATE_LOBBY) {
-		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
-			perror("send_msg JOIN_GAME_FAIL");
+		if (send_msg(client->fd, MSG_JOIN_ROOM_FAIL, nullptr, 0) != 0) {
+			perror("send_msg JOIN_ROOM_FAIL");
 		}
 		return;
 	}
 
 	Game* game = find_game_by_id(msg->game_id);
 
-	if (game == nullptr || game->player_count >= MAX_PLAYERS) {
-		if (send_msg(client->fd, MSG_JOIN_GAME_FAIL, nullptr, 0) != 0) {
-			perror("send_msg JOIN_GAME_FAIL");
+	if (game == nullptr || game->player_count >= MAX_PLAYERS || game->active) {
+		if (send_msg(client->fd, MSG_JOIN_ROOM_FAIL, nullptr, 0) != 0) {
+			perror("send_msg JOIN_ROOM_FAIL");
 		}
 		return;
 	}
@@ -480,8 +490,8 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	printf("Klient %s dołączył do gry id=%d\n", client->nick, game->id);
 
 	// Powiadom gracza
-	if (send_msg(client->fd, MSG_JOIN_GAME_OK, game, 0) != 0) {
-		perror("send_msg JOIN_GAME_OK");
+	if (send_msg(client->fd, MSG_JOIN_ROOM_OK, game, 0) != 0) {
+		perror("send_msg JOIN_ROOM_OK");
 	}
 
 	printf("Gry dostępne na serwerze po dołączeniu nowego gracza:\n");
@@ -706,7 +716,8 @@ void send_lobby_state(std::shared_ptr<Client> client) {
 	for (const auto& [id, game] : games) {
 		if (msg.games_count >= MAX_GAMES)
 			break;
-
+		if (game.active)
+			continue;
 		msg.games[msg.games_count].game_id = game.id;
 		msg.games[msg.games_count].players_count = game.player_count;
 		msg.games_count++;
@@ -754,4 +765,20 @@ void brodcast_game_state(Game& game) {
     }
 
 	broadcast_to_game(game, MSG_GAME_STATE, &game_state, sizeof(game_state));
+}
+void handle_shutdown(int sig) {
+    server_running = 0;
+}
+
+void graceful_shutdown() {
+    printf("Serwer się wyłącza – informuję klientów\n");
+
+    for (auto& [fd, client] : clients) {
+		user_exit_game(client);
+        send_msg(fd, MSG_SERVER_SHUTDOWN, nullptr, 0);
+        shutdown(fd, SHUT_RDWR); // wysyła FIN
+        close(fd);
+    }
+
+    clients.clear();
 }

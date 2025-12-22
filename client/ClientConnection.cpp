@@ -156,6 +156,10 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_EXIT_GAME_FAIL:
 			if (onExitGameFail) onExitGameFail();
 			break;
+		case MSG_SERVER_SHUTDOWN:
+			if (onError) onError("Server is shutting down");
+			running = false;
+			break;
         default:
 			// Nieznany typ wiadomości
 			break;

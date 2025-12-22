@@ -79,7 +79,9 @@ int main() {
 		std::cout << "Gra zakończona\n";
 	};
 	client.onPlayerEliminated = [] {
+		std::cout << "-------------------------------\n";
 		std::cout << "Zostałeś wyeliminowany z gry!!!\n";
+		std::cout << "-------------------------------\n";
 	};
 	client.onWordGuessed = [] {
 		std::cout << "Gratulacje! Słowo zostało odgadnięte!\n";
@@ -90,6 +92,9 @@ int main() {
 	};
 	client.onExitGameFail = [] {
 		std::cout << "Nie można opuścić gry\n";
+	};
+	client.onError = [](const std::string& msg) {
+		std::cout << msg << "\n";
 	};
 
     // --- start ---

@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QScrollArea>
+#include <QPushButton>
 #include <vector>
 
 class LobbyScreen : public QWidget
@@ -19,9 +20,11 @@ public:
 
 signals:
     void joinGame(int gameId);
+    void createGame();
 
 private:
     QLabel *welcomeLabel;
+    QPushButton *createButton;
 
     QScrollArea *scrollArea;
     QWidget *gamesWidget;

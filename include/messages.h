@@ -21,6 +21,14 @@ typedef struct {
     uint32_t game_id;
 }  MsgGameIdReq;
 
+// Sent by server to confirm room creation / join with basic room info
+typedef struct {
+    uint32_t game_id;
+    uint8_t players_count;
+    char owner[MAX_NICK_LEN];
+    char players[8][MAX_NICK_LEN];
+} MsgRoomInfo;
+
 typedef struct {
     char letter;
 } MsgGuessLetterReq;

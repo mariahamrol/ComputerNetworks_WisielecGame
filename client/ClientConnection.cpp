@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <vector>
 
 ClientConnection::ClientConnection() {}
 
@@ -123,12 +124,26 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 				onLobbyState(copy);
 			break;
 		}
-        case MSG_CREATE_ROOM_OK:
-            if (onCreateRoomOk) onCreateRoomOk();
+        case MSG_CREATE_ROOM_OK: {
+            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            std::vector<std::string> players;
+            for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
+                players.emplace_back(info.players[i]);
+            }
+            if (onCreateRoomOk)
+                onCreateRoomOk(info.game_id, info.players_count, std::string(info.owner), players);
             break;
-        case MSG_JOIN_ROOM_OK:
-            if (onJoinRoomOk) onJoinRoomOk();
+        }
+        case MSG_JOIN_ROOM_OK: {
+            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            std::vector<std::string> players;
+            for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
+                players.emplace_back(info.players[i]);
+            }
+            if (onJoinRoomOk)
+                onJoinRoomOk(info.game_id, info.players_count, std::string(info.owner), players);
             break;
+        }
 		case MSG_JOIN_ROOM_FAIL:
 			if (onJoinRoomFail) onJoinRoomFail();
 			break;

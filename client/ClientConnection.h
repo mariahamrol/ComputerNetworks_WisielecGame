@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <functional>
 #include <thread>
 #include <atomic>
@@ -15,8 +16,8 @@ public:
     std::function<void()> onLoginOk;
     std::function<void()> onLoginTaken;
     std::function<void(const MsgLobbyState&)> onLobbyState;
-    std::function<void()> onCreateRoomOk;
-    std::function<void()> onJoinRoomOk;
+    std::function<void(uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)> onCreateRoomOk;
+    std::function<void(uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)> onJoinRoomOk;
 	std::function<void()> onJoinRoomFail;
     std::function<void()> onStartGameOk;
 	std::function<void()> onGameEnd;

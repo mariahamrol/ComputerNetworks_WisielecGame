@@ -3,12 +3,13 @@
 #include <QFontDatabase>
 #include <QPixmap>
 #include <QDebug>
+#include <QMessageBox>
 
 StartScreen::StartScreen(QWidget *parent)
     : QWidget(parent)
 {
     QFont appFont;
-    int fontId = QFontDatabase::addApplicationFont("C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
+    int fontId = QFontDatabase::addApplicationFont("./assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
         appFont = QFont(family, 20, QFont::Bold);
@@ -61,4 +62,11 @@ StartScreen::StartScreen(QWidget *parent)
         QString login = login_enter->text();
         emit startClicked(login);
     });
+}
+
+void StartScreen::showLoginError(const QString &msg)
+{
+    QMessageBox::warning(this, "Login failed", msg);
+    login_enter->clear();
+    login_enter->setFocus();
 }

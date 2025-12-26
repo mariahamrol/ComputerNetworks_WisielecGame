@@ -494,6 +494,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 
 	printf("Klient %s dołączył do gry id=%d\n", client->nick, game->id);
 
+
 	// Powiadom gracza
 	if (send_msg(client->fd, MSG_JOIN_ROOM_OK, game, 0) != 0) {
 		perror("send_msg JOIN_ROOM_OK");
@@ -697,6 +698,7 @@ void handle_create_room(std::shared_ptr<Client> client) {
 
     printf("Utworzono grę id=%d owner=%s\n",game.id, game.owner);
 
+
     // Powiadom twórcę 
 	printf("Wysyłam CREATE_ROOM_OK do %s (fd=%d)\n", client->nick, client->fd);
     if (send_msg(client->fd, MSG_CREATE_ROOM_OK, nullptr, 0) != 0) {
@@ -707,6 +709,7 @@ void handle_create_room(std::shared_ptr<Client> client) {
     if (send_msg(client->fd, MSG_JOIN_ROOM_OK, &game, 0) != 0) {
 		perror("send_msg JOIN_ROOM_OK");
 	}
+
 	
 	printf("Gry dostępne na serwerze:\n");
 

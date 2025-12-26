@@ -5,6 +5,8 @@
 #include <QDebug>
 #include <QFontDatabase>
 
+#define MAX_LIVES 8
+
 GameScreen::GameScreen(QWidget *parent)
     : QWidget(parent)
 {
@@ -38,7 +40,7 @@ GameScreen::GameScreen(QWidget *parent)
     QWidget *keyboardWidget = new QWidget(this);
     keyboardLayout = new QGridLayout(keyboardWidget);
 
-    const QString letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const QString letters = "AĄBCĆDEĘFGHIJKLŁMNŃOÓPQRSŚTUVWXYZŻŹ";
     int row = 0, col = 0;
 
     for (QChar letter : letters) {
@@ -56,6 +58,7 @@ GameScreen::GameScreen(QWidget *parent)
         });
 
         keyboardLayout->addWidget(btn, row, col);
+        letterButtons[letter] = btn;  // Zachowaj referencję do przycisku
 
         col++;
         if (col == 7) {
@@ -65,18 +68,72 @@ GameScreen::GameScreen(QWidget *parent)
     }
 
     middleLayout->addWidget(keyboardWidget);
+    setLayout(mainLayout);
+}
 
-    Hangman *myHangman = new Hangman();
-    myHangman->setMinimumSize(300,300);
-    myHangman->setMistakes(8);
-    middleLayout->addWidget(myHangman);
+void GameScreen::setHiddenWord(const QString &word) {
+    currentWord = word;
+    wordLabel->setText(word);
+    resetKeyboard();  // Nowe słowo = reset klawiatury
+    qDebug() << "Hidden word set to:" << word;
+}
 
-    QHBoxLayout *playersLayout = new QHBoxLayout();
-    mainLayout->addLayout(playersLayout);
-    for(int i=0;i<5;i++){
-        Hangman *otherHangman = new Hangman();
-        otherHangman->setMinimumSize(150,150);
-        otherHangman->setMistakes(i);
-        playersLayout->addWidget(otherHangman);
+void GameScreen::setPlayers(const std::vector<QString> &players, const QString &myNick) {
+    // TODO: Implement player list display
+    qDebug() << "Players:" << players.size() << "My nick:" << myNick;
+}
+
+void GameScreen::updateGameState(const QString &word, const std::vector<int> &lives) {
+    // Sprawdź czy to nowe słowo (nowa tura)
+    if (currentWord != word) {
+        currentWord = word;
+        resetKeyboard();  // Nowe słowo = reset klawiatury
+        qDebug() << "New word detected - keyboard reset";
+    }
+    
+    // Zaktualizuj wyświetlane słowo (od serwera)
+    wordLabel->setText(word);
+    qDebug() << "Game state updated - Word:" << word << "Lives:" << lives.size();
+    
+    // TODO: Update lives display for all players
+}
+
+void GameScreen::updateGameState(const QString &word, const std::vector<int> &lives, const QString &guessedLetters) {
+    // Sprawdź czy to nowe słowo (nowa tura)
+    if (currentWord != word) {
+        currentWord = word;
+        resetKeyboard();  // Nowe słowo = reset klawiatury
+        qDebug() << "New word detected - keyboard reset";
+    }
+    
+    // Zaktualizuj wyświetlane słowo (od serwera)
+    wordLabel->setText(word);
+    
+    // Dezaktywuj zgadnięte litery
+    disableGuessedLetters(guessedLetters);
+    
+    qDebug() << "Game state updated - Word:" << word << "Lives:" << lives.size() << "Guessed:" << guessedLetters;
+}
+
+void GameScreen::incrementMyMistakes() {
+    // TODO: Implement mistake increment logic
+    qDebug() << "My mistakes incremented";
+}
+
+void GameScreen::resetKeyboard() {
+    // Włącz wszystkie przyciski
+    for (auto btn : letterButtons) {
+        btn->setEnabled(true);
+    }
+    qDebug() << "Keyboard reset - all letters enabled";
+}
+
+void GameScreen::disableGuessedLetters(const QString &guessedLetters) {
+    // Dezaktywuj litery które zostały już zgadnięte
+    for (QChar letter : guessedLetters) {
+        if (letterButtons.contains(letter)) {
+            letterButtons[letter]->setEnabled(false);
+        }
     }
 }
+

@@ -10,6 +10,7 @@ class Hangman : public QWidget
 public:
     explicit Hangman(QWidget *parent = nullptr);
     void setMistakes(int count);
+    int getMistakes() const { return mistakes; }
 
 protected:
     void paintEvent(QPaintEvent *event) override;

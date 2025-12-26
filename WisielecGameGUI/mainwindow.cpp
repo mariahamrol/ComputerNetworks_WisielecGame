@@ -60,9 +60,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::joinedGame,
             this, [&](int gameId,
                 std::vector<QString> players,
+                QString owner,
                 bool isHost)
             {
-                waitingScreen->setRoomState(gameId, players, isHost);
+                waitingScreen->setRoomState(gameId, players, owner, isHost);
                 stack->setCurrentWidget(waitingScreen);
             });
 
@@ -72,11 +73,28 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::gameStarted,
             this, [&](int gameId,
                 QString hiddenWord,
-                std::vector<QString> players)
+                std::vector<QString> players,
+                QString myNick)
             {
-                // gameScreen->setHiddenWord(hiddenWord);
-                // gameScreen->setPlayers(players);
+                gameScreen->setHiddenWord(hiddenWord);
+                gameScreen->setPlayers(players, myNick);
 
                 stack->setCurrentWidget(gameScreen);
             });
+    
+    connect(gameScreen, &GameScreen::letterClicked,
+            controller, &GameController::guessLetterRequested);
+    
+    connect(controller, &GameController::gameStateUpdated,
+            this, [&](int gameId,
+                QString hiddenWord,
+                std::vector<QString> players,
+                std::vector<int> lives,
+                QString guessedLetters)
+            {
+                gameScreen->updateGameState(hiddenWord, lives, guessedLetters);
+            });
+    
+    connect(controller, &GameController::wrongLetterGuessed,
+            gameScreen, &GameScreen::incrementMyMistakes);
 }

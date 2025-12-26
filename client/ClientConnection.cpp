@@ -74,6 +74,12 @@ void ClientConnection::guessLetter(char letter) {
 	MsgGuessLetterReq req{ letter };
 	send_msg(sock, MSG_GUESS_LETTER_REQ, &req, sizeof(req));
 }
+void ClientConnection::exitGame() {
+	send_msg(sock, MSG_EXIT_GAME_REQ, nullptr, 0);
+}
+void ClientConnection::exitRoom() {
+	send_msg(sock, MSG_EXIT_ROOM_REQ, nullptr, 0);
+}
 
 void ClientConnection::recvLoop() {
     char buffer[4096];
@@ -140,7 +146,6 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
         }
 		case MSG_JOIN_ROOM_FAIL:
 			if (onJoinRoomFail) onJoinRoomFail();
-			// Można dodać obsługę błędu dołączenia do pokoju
 			break;
 		case MSG_START_GAME_OK:
 			if (onStartGameOk) onStartGameOk();
@@ -154,7 +159,31 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_GUESS_LETTER_FAIL:
 			if (onGuessLetterFail) onGuessLetterFail();
 			break;
-
+		case MSG_GAME_END:
+			if (onGameEnd) onGameEnd();
+			break;
+		case MSG_PLAYER_ELIMINATED:
+			if (onPlayerEliminated) onPlayerEliminated();
+			break;
+		case MSG_WORD_GUESSED:
+			if (onWordGuessed) onWordGuessed();
+			break;
+		case MSG_EXIT_GAME_OK:
+			if (onExitGameOk) onExitGameOk();
+			break;
+		case MSG_EXIT_GAME_FAIL:
+			if (onExitGameFail) onExitGameFail();
+			break;
+		case MSG_SERVER_SHUTDOWN:
+			if (onError) onError("Server is shutting down");
+			running = false;
+			break;
+		case MSG_EXIT_ROOM_OK:
+			if (onExitRoomOk) onExitRoomOk();
+			break;
+		case MSG_EXIT_ROOM_FAIL:
+			if (onExitRoomFail) onExitRoomFail();
+			break;
         default:
 			// Nieznany typ wiadomości
 			break;

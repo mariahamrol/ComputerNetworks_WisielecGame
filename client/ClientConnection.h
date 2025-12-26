@@ -20,8 +20,16 @@ public:
     std::function<void(uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)> onJoinRoomOk;
 	std::function<void()> onJoinRoomFail;
     std::function<void()> onStartGameOk;
-    std::function<void()> onGuessLetterOk;
+	std::function<void()> onGameEnd;
+	std::function<void()> onExitGameOk;
+	std::function<void()> onExitGameFail;
+	std::function<void()> onExitRoomOk;
+	std::function<void()> onExitRoomFail;
+    std::function<void()> onGuessLetterOk;	
 	std::function<void()> onGuessLetterFail;
+	std::function<void()> onPlayerEliminated;
+	std::function<void()> onWordGuessed;
+	std::function<void()> onServerShutdown;
 	std::function<void(const MsgGameState&)> onGameState;
     std::function<void()> onStartGameFail;
     std::function<void(const std::string&)> onError;
@@ -40,6 +48,8 @@ public:
     void joinRoom(uint32_t roomId);
 	void startGame(uint32_t roomId);
 	void guessLetter(char letter);
+	void exitGame();
+	void exitRoom();
 
 private:
     int sock = -1;

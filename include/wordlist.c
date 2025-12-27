@@ -1,12 +1,33 @@
 #include "wordlist.h"
 
 const char *WORD_LIST[] = {
-    // "komputer",
-    // "programowanie",
-    // "linux",
-    // "serwer"
+    "komputer",
+    "programowanie",
+    "linux",
+    "serwer",
+    "klient",
+    "sieci",
+    "protokol",
+    "aplikacja",
+    "debugowanie",
+    "testowanie",
+    "interfejs",
+    "funkcja",
+    "zmienna",
+    "petla",
+    "warunek",
+    "dupa",
+    "piwo",
+    "trunek",
+    "arystokracja",
+    "kaczka",
+    "samochod",
+    "rower",
+    "żarówka",
+    "telefon",
+    "monitor",
 	"aaa",
-	"bbbbb",
+	"bbbb",
 };
 
 const char POLISH_ALPHABET[] = "aąbcćdeęfghijklłmnńoóprsśtuwyzźż";

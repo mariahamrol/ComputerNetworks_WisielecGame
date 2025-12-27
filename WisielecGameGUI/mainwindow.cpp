@@ -60,9 +60,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::joinedGame,
             this, [&](int gameId,
                 std::vector<QString> players,
+                QString owner,
                 bool isHost)
             {
-                waitingScreen->setRoomState(gameId, players, isHost);
+                waitingScreen->setRoomState(gameId, players, owner, isHost);
                 stack->setCurrentWidget(waitingScreen);
             });
 
@@ -72,11 +73,58 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::gameStarted,
             this, [&](int gameId,
                 QString hiddenWord,
-                std::vector<QString> players)
+                std::vector<QString> players,
+                QString myNick)
             {
-                // gameScreen->setHiddenWord(hiddenWord);
-                // gameScreen->setPlayers(players);
+                qDebug() << "[MainWindow] gameStarted signal received!";
+                qDebug() << "[MainWindow] Switching to GameScreen...";
+                gameScreen->setHiddenWord(hiddenWord);
+                gameScreen->setPlayers(players, myNick);
 
                 stack->setCurrentWidget(gameScreen);
+                qDebug() << "[MainWindow] Current widget set to GameScreen";
             });
+    
+    connect(gameScreen, &GameScreen::letterClicked,
+            controller, &GameController::guessLetterRequested);
+    
+    connect(controller, &GameController::gameStateUpdated,
+            this, [&](int gameId,
+                QString hiddenWord,
+                std::vector<QString> players,
+                std::vector<int> lives,
+                std::vector<int> points,
+                QString guessedLetters,
+                QString myGuessedLetters)
+            {
+                gameScreen->updateGameState(hiddenWord, players, lives, points, guessedLetters, myGuessedLetters);
+            });
+    
+    connect(controller, &GameController::wrongLetterGuessed,
+            gameScreen, &GameScreen::incrementMyMistakes);
+
+    connect(controller, &GameController::playerEliminated,
+            gameScreen, &GameScreen::disablePlayer);
+    
+    // Exit game/room connections
+    connect(gameScreen, &GameScreen::exitGame,
+            controller, &GameController::exitGameRequested);
+    
+    connect(waitingScreen, &WaitingRoomScreen::exitRoom,
+            controller, &GameController::exitRoomRequested);
+    
+    connect(controller, &GameController::exitedGame, this, [&]() {
+        qDebug() << "[MainWindow] Exited game, returning to lobby";
+        stack->setCurrentWidget(lobbyScreen);
+    });
+    
+    connect(controller, &GameController::exitedRoom, this, [&]() {
+        qDebug() << "[MainWindow] Exited room, returning to lobby";
+        stack->setCurrentWidget(lobbyScreen);
+    });
+    
+    connect(controller, &GameController::roomClosed, this, [&]() {
+        qDebug() << "[MainWindow] Room closed (host left), returning to lobby";
+        stack->setCurrentWidget(lobbyScreen);
+    });
 }

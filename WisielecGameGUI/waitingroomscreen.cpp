@@ -40,17 +40,44 @@ WaitingRoomScreen::WaitingRoomScreen(QWidget *parent)
     buttonFont.setPointSize(25);
     startButton->setFont(buttonFont);
     main->addWidget(startButton);
+    
+    // Przycisk Exit
+    QPushButton *exitButton = new QPushButton("Exit Room", this);
+    exitButton->setFont(buttonFont);
+    exitButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; }");
+    connect(exitButton, &QPushButton::clicked, this, &WaitingRoomScreen::exitRoom);
+    main->addWidget(exitButton);
 
-    connect(startButton, &QPushButton::clicked,
-            this, &WaitingRoomScreen::startGameClicked);
+    ownerLabel = new QLabel(this);
+    ownerLabel->setAlignment(Qt::AlignCenter);
+    ownerLabel->setFont(playersFont);
+    main->addWidget(ownerLabel);
+
+    // playersCountLabel = new QLabel(this);
+    // playersCountLabel->setAlignment(Qt::AlignCenter);
+    // playersCountLabel->setFont(playersFont);
+    // main->addWidget(playersCountLabel);
+
+    connect(startButton, &QPushButton::clicked, this, [this]() {
+    if (currentGameId != -1) {
+        emit startGame(currentGameId);
+    }
+});
+
 }
 
 void WaitingRoomScreen::setRoomState(
     int gameId,
     const std::vector<QString> &players,
+    const QString &owner,
     bool isHost)
 {
     gameIdLabel->setText(QString("Game ID: %1").arg(gameId));
+    currentGameId = gameId;
+    ownerLabel->setText(QString("Host: %1").arg(owner));
+    // playersCountLabel->setText(
+    //     QString("Players: %1").arg(players.size())
+    // );
 
     QLayoutItem *item;
     while ((item = playersLayout->takeAt(0)) != nullptr) {
@@ -59,15 +86,17 @@ void WaitingRoomScreen::setRoomState(
     }
 
     for (const auto &nick : players) {
-        playersLayout->addWidget(new QLabel(nick));
+        QLabel *lbl = new QLabel(nick);
+        playersLayout->addWidget(lbl);
     }
 
     startButton->setEnabled(isHost);
-    if(isHost){
-        startButton->setStyleSheet("QPushButton {background-color: lightgreen}");
-    }
+    startButton->setVisible(isHost);
 
-    connect(startButton, &QPushButton::clicked, this, [=]() {
-        emit startGame(gameId);
-    });
+    if (isHost) {
+        startButton->setStyleSheet(
+            "QPushButton { background-color: lightgreen; }"
+        );
+    }
 }
+

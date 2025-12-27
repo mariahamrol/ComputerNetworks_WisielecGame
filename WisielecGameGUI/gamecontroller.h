@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <vector>
+#include <QVariant>
 #include "client/ClientConnection.h"
 
 class GameController : public QObject {
@@ -15,6 +16,9 @@ public slots:
     void joinGameRequested(int gameId);
     void startGameRequested(int gameId);
     void createGameRequested();
+    void guessLetterRequested(QChar letter);
+    void exitGameRequested();
+    void exitRoomRequested();
     // bool give_mistakes = true;
 
 signals:
@@ -23,9 +27,16 @@ signals:
 
     void lobbyStateUpdated(const std::vector<int> &games);
     void createdGame(int gameId);
-    void joinedGame(int gameId, std::vector<QString> players, bool isHost);
-    void gameStarted( int gameId, QString hiddenWord, std::vector<QString> players);
+    void joinedGame(int gameId, std::vector<QString> players, QString owner, bool isHost);
+    void gameStateUpdated(int gameId, QString hiddenWord, std::vector<QString> players, std::vector<int> lives, std::vector<int> points, QString guessedLetters, QString myGuessedLetters);
+    void gameStarted( int gameId, QString hiddenWord, std::vector<QString> players, QString myNick);
+    void wrongLetterGuessed();
+    void playerEliminated();
+    void exitedGame();
+    void exitedRoom();
+    void roomClosed();
 private:
     ClientConnection *client;
+    QString myNickname;
 };
 #endif // GAMECONTROLLER_H

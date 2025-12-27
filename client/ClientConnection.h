@@ -18,6 +18,7 @@ public:
     std::function<void(const MsgLobbyState&)> onLobbyState;
     std::function<void(uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)> onCreateRoomOk;
     std::function<void(uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)> onJoinRoomOk;
+
 	std::function<void()> onJoinRoomFail;
     std::function<void()> onStartGameOk;
 	std::function<void()> onGameEnd;

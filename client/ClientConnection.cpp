@@ -150,6 +150,17 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_START_GAME_OK:
 			if (onStartGameOk) onStartGameOk();
 			break;
+        // case MSG_START_GAME_OK: {
+        //     auto* msg = (MsgStartGameOk*)payload;
+
+        //     if (onStartGameOk)
+        //         onStartGameOk(
+        //             msg->game_id,
+        //             std::string(msg->hidden_word)
+        //         );
+        //     break;
+        // }
+
 		case MSG_START_GAME_FAIL:
 			if (onStartGameFail) onStartGameFail();
 			break;

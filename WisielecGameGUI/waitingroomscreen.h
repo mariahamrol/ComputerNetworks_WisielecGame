@@ -27,6 +27,7 @@ public:
         void startGameClicked();
         void leaveRoomClicked();
         void startGame(int gameId);
+        void exitRoom();
 
     private:
         int currentGameId = -1;

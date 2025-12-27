@@ -66,13 +66,19 @@ void LobbyScreen::set_login(const QString &login)
 
 void LobbyScreen::display_games(const std::vector<int> &gameIds)
 {
+    qDebug() << "[LobbyScreen] display_games called with" << gameIds.size() << "games";
+    
+    // Usuń wszystkie stare wpisy
     QLayoutItem *item;
     while ((item = gamesLayout->takeAt(0)) != nullptr) {
         delete item->widget();
         delete item;
     }
+    qDebug() << "[LobbyScreen] Cleared old games list";
 
+    // Dodaj nowe gry
     for (int gameId : gameIds) {
+        qDebug() << "[LobbyScreen] Adding game ID:" << gameId;
         QWidget *row = new QWidget(this);
         QHBoxLayout *rowLayout = new QHBoxLayout(row);
 
@@ -95,4 +101,5 @@ void LobbyScreen::display_games(const std::vector<int> &gameIds)
     }
 
     gamesLayout->addStretch();
+    qDebug() << "[LobbyScreen] display_games completed";
 }

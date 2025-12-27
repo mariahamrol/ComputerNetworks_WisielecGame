@@ -5,10 +5,10 @@
 #include <QDebug>
 #include <QFontDatabase>
 
-#define MAX_LIVES 8
+#define MAX_LIVES 2
 
 GameScreen::GameScreen(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), isEliminated(false)
 {
 
     QFont appFont;
@@ -68,6 +68,54 @@ GameScreen::GameScreen(QWidget *parent)
     }
 
     middleLayout->addWidget(keyboardWidget);
+
+    // Mój wisielec (większy, obok klawiatury)
+    QVBoxLayout *myHangmanLayout = new QVBoxLayout();
+    myHangmanLayout->setAlignment(Qt::AlignCenter);
+    middleLayout->addLayout(myHangmanLayout);
+    
+    myHangman = new Hangman(this);
+    myHangman->setFixedSize(200, 200);
+    myHangman->setMistakes(0);  // Początek z 0 błędami
+    myHangmanLayout->addWidget(myHangman, 0, Qt::AlignCenter);
+    
+    // Nick i punkty w poziomym layoutcie
+    QHBoxLayout *myInfoLayout = new QHBoxLayout();
+    myInfoLayout->setAlignment(Qt::AlignCenter);
+    
+    myNickLabel = new QLabel("My Nick", this);
+    myNickLabel->setAlignment(Qt::AlignCenter);
+    QFont nickFont = appFont;
+    nickFont.setPointSize(12);
+    nickFont.setBold(true);
+    myNickLabel->setFont(nickFont);
+    myInfoLayout->addWidget(myNickLabel);
+    
+    myPointsLabel = new QLabel("0 pts", this);
+    myPointsLabel->setAlignment(Qt::AlignCenter);
+    QFont pointsFont = appFont;
+    pointsFont.setPointSize(10);
+    myPointsLabel->setFont(pointsFont);
+    myPointsLabel->setStyleSheet("color: #4CAF50; margin-left: 10px;");
+    myInfoLayout->addWidget(myPointsLabel);
+    
+    myHangmanLayout->addLayout(myInfoLayout);
+
+    // Wisielce innych graczy (mniejsze, pod klawiaturą)
+    otherHangmansLayout = new QHBoxLayout();
+    otherHangmansLayout->setAlignment(Qt::AlignCenter);
+    mainLayout->addLayout(otherHangmansLayout);
+    
+    // Przycisk Exit na dole
+    QPushButton *exitButton = new QPushButton("Exit Game", this);
+    QFont exitFont = appFont;
+    exitFont.setPointSize(14);
+    exitFont.setBold(true);
+    exitButton->setFont(exitFont);
+    exitButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 10px; }");
+    connect(exitButton, &QPushButton::clicked, this, &GameScreen::exitGame);
+    mainLayout->addWidget(exitButton);
+
     setLayout(mainLayout);
 }
 
@@ -79,11 +127,57 @@ void GameScreen::setHiddenWord(const QString &word) {
 }
 
 void GameScreen::setPlayers(const std::vector<QString> &players, const QString &myNick) {
-    // TODO: Implement player list display
-    qDebug() << "Players:" << players.size() << "My nick:" << myNick;
+    qDebug() << "Setting up players. Total:" << players.size() << "My nick:" << myNick;
+    
+    // Ustaw swój nick
+    myNickLabel->setText(myNick);
+    
+    // Wyczyść poprzednie wisielce innych graczy
+    for (auto hangman : otherHangmans.values()) {
+        delete hangman;
+    }
+    for (auto label : otherNickLabels.values()) {
+        delete label;
+    }
+    otherHangmans.clear();
+    otherNickLabels.clear();
+    
+    // Utwórz wisielce dla innych graczy
+    QFont nickFont;
+    nickFont.setPointSize(10);
+    nickFont.setBold(true);
+    
+    for (const QString &playerNick : players) {
+        if (playerNick == myNick) {
+            continue; // Pomijamy siebie
+        }
+        
+        // Utwórz pionowy layout dla każdego gracza (wisielec + nick)
+        QVBoxLayout *playerLayout = new QVBoxLayout();
+        playerLayout->setAlignment(Qt::AlignCenter);
+        playerLayout->setSpacing(5);
+        
+        // Wisielec
+        Hangman *hangman = new Hangman(this);
+        hangman->setFixedSize(100, 100);
+        hangman->setMistakes(0);  // Początek z 0 błędami
+        playerLayout->addWidget(hangman, 0, Qt::AlignCenter);
+        otherHangmans[playerNick] = hangman;
+        
+        // Nick pod wisielcem
+        QLabel *nickLabel = new QLabel(playerNick, this);
+        nickLabel->setAlignment(Qt::AlignCenter);
+        nickLabel->setFont(nickFont);
+        playerLayout->addWidget(nickLabel, 0, Qt::AlignCenter);
+        otherNickLabels[playerNick] = nickLabel;
+        
+        otherHangmansLayout->addLayout(playerLayout);
+    }
+    
+    qDebug() << "Created" << otherHangmans.size() << "other player hangmans";
 }
 
-void GameScreen::updateGameState(const QString &word, const std::vector<int> &lives) {
+void GameScreen::updateGameState(const QString &word, const std::vector<QString> &players, const std::vector<int> &lives, const std::vector<int> &points, const QString &guessedLetters, const QString &myGuessedLetters) {
     // Sprawdź czy to nowe słowo (nowa tura)
     if (currentWord != word) {
         currentWord = word;
@@ -93,26 +187,30 @@ void GameScreen::updateGameState(const QString &word, const std::vector<int> &li
     
     // Zaktualizuj wyświetlane słowo (od serwera)
     wordLabel->setText(word);
-    qDebug() << "Game state updated - Word:" << word << "Lives:" << lives.size();
     
-    // TODO: Update lives display for all players
-}
-
-void GameScreen::updateGameState(const QString &word, const std::vector<int> &lives, const QString &guessedLetters) {
-    // Sprawdź czy to nowe słowo (nowa tura)
-    if (currentWord != word) {
-        currentWord = word;
-        resetKeyboard();  // Nowe słowo = reset klawiatury
-        qDebug() << "New word detected - keyboard reset";
+    // Dezaktywuj zgadnięte litery (globalnie i dla gracza)
+    disableGuessedLetters(guessedLetters, myGuessedLetters);
+    
+    // Zaktualizuj wisielce i punkty na podstawie żyć
+    for (size_t i = 0; i < players.size() && i < lives.size(); ++i) {
+        const QString &playerNick = players[i];
+        int playerLives = lives[i];
+        int playerPoints = (i < points.size()) ? points[i] : 0;
+        int mistakes = MAX_LIVES - playerLives;
+        
+        if (playerNick == myNickLabel->text()) {
+            // To ja - zaktualizuj mój wisielec i punkty
+            myHangman->setMistakes(mistakes);
+            myPointsLabel->setText(QString("%1 pts").arg(playerPoints));
+            qDebug() << "Updated my hangman:" << mistakes << "mistakes," << playerPoints << "points";
+        } else if (otherHangmans.contains(playerNick)) {
+            // Inny gracz - zaktualizuj jego wisielca
+            otherHangmans[playerNick]->setMistakes(mistakes);
+            qDebug() << "Updated" << playerNick << "hangman:" << mistakes << "mistakes";
+        }
     }
     
-    // Zaktualizuj wyświetlane słowo (od serwera)
-    wordLabel->setText(word);
-    
-    // Dezaktywuj zgadnięte litery
-    disableGuessedLetters(guessedLetters);
-    
-    qDebug() << "Game state updated - Word:" << word << "Lives:" << lives.size() << "Guessed:" << guessedLetters;
+    qDebug() << "Game state updated - Word:" << word << "Lives:" << lives.size() << "Global guessed:" << guessedLetters << "My guessed:" << myGuessedLetters;
 }
 
 void GameScreen::incrementMyMistakes() {
@@ -120,7 +218,18 @@ void GameScreen::incrementMyMistakes() {
     qDebug() << "My mistakes incremented";
 }
 
+void GameScreen::updateMyMistakes(int mistakes) {
+    myHangman->setMistakes(mistakes);
+    qDebug() << "[GameScreen] Updated my hangman to" << mistakes << "mistakes";
+}
+
 void GameScreen::resetKeyboard() {
+    // Jeśli gracz jest wyeliminowany, nie włączaj przycisków
+    if (isEliminated) {
+        qDebug() << "Keyboard reset skipped - player is eliminated";
+        return;
+    }
+    
     // Włącz wszystkie przyciski
     for (auto btn : letterButtons) {
         btn->setEnabled(true);
@@ -128,12 +237,40 @@ void GameScreen::resetKeyboard() {
     qDebug() << "Keyboard reset - all letters enabled";
 }
 
-void GameScreen::disableGuessedLetters(const QString &guessedLetters) {
-    // Dezaktywuj litery które zostały już zgadnięte
+void GameScreen::disableGuessedLetters(const QString &guessedLetters, const QString &myGuessedLetters) {
+    qDebug() << "[GameScreen] disableGuessedLetters called";
+    qDebug() << "[GameScreen] Global guessed:" << guessedLetters;
+    qDebug() << "[GameScreen] My guessed:" << myGuessedLetters;
+    
+    // Dezaktywuj litery które zostały poprawnie zgadnięte (dla wszystkich graczy)
     for (QChar letter : guessedLetters) {
-        if (letterButtons.contains(letter)) {
-            letterButtons[letter]->setEnabled(false);
+        QChar upperLetter = letter.toUpper();
+        qDebug() << "[GameScreen] Checking global letter:" << letter << "-> upper:" << upperLetter;
+        if (letterButtons.contains(upperLetter)) {
+            letterButtons[upperLetter]->setEnabled(false);
+            qDebug() << "[GameScreen] Disabled button for all:" << upperLetter;
+        } else {
+            qDebug() << "[GameScreen] Button not found for:" << upperLetter;
         }
+    }
+    
+    // Dezaktywuj litery które zgadł ten gracz (niezależnie czy poprawne czy nie)
+    for (QChar letter : myGuessedLetters) {
+        QChar upperLetter = letter.toUpper();
+        qDebug() << "[GameScreen] Checking my letter:" << letter << "-> upper:" << upperLetter;
+        if (letterButtons.contains(upperLetter)) {
+            letterButtons[upperLetter]->setEnabled(false);
+            qDebug() << "[GameScreen] Disabled button for me:" << upperLetter;
+        } else {
+            qDebug() << "[GameScreen] Button not found for:" << upperLetter;
+        }
+    }
+}
+
+void GameScreen::disablePlayer() {
+    isEliminated = true;
+    for (auto btn : letterButtons) {
+        btn->setEnabled(false);
     }
 }
 

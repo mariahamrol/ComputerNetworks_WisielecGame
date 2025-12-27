@@ -12,11 +12,14 @@ GameController::GameController(QObject *parent)
         
         // Setup lobby state callback - będzie aktywny zawsze
         client->onLobbyState = [this](const MsgLobbyState& msg) {
+            qDebug() << "[GameController] Received lobby state update, games count:" << msg.games_count;
             std::vector<int> games;
             for (uint32_t i = 0; i < msg.games_count; ++i) {
                 games.push_back(msg.games[i].game_id);
+                qDebug() << "[GameController] Game ID:" << msg.games[i].game_id << "Players:" << msg.games[i].players_count;
             }
             emit lobbyStateUpdated(games);
+            qDebug() << "[GameController] Emitted lobbyStateUpdated signal";
         };
 
         client->onStartGameOk = [this]() {
@@ -30,6 +33,7 @@ GameController::GameController(QObject *parent)
             // Konwertuj dane graczy i ich życia
             std::vector<QString> qplayers;
             std::vector<int> lives;
+            std::vector<int> points;
             bool gameJustStarted = true;
             
             // Pobierz ukryte słowo z serwera (z spacjami między literami)
@@ -41,24 +45,45 @@ GameController::GameController(QObject *parent)
             }
             hiddenWord = displayWord;
             
-            // Pobierz zgadnięte litery
+            // Pobierz zgadnięte litery globalnie (dla wszystkich graczy)
             QString guessedLetters = QString::fromStdString(msg.guessed_letters);
+            qDebug() << "[GameController] Global guessed letters from server:" << guessedLetters;
             
+            // Pobierz zgadnięte litery dla aktualnego gracza
+            QString myGuessedLetters = "";
             for (uint8_t i = 0; i < msg.player_count && i < 8; ++i) {
-                qplayers.push_back(QString::fromStdString(msg.players[i].nick));
+                QString playerNick = QString::fromStdString(msg.players[i].nick);
+                qplayers.push_back(playerNick);
                 lives.push_back(msg.players[i].lives);
+                points.push_back(msg.players[i].points);
                 if (msg.players[i].lives != MAX_LIVES) {
                     gameJustStarted = false;
                 }
+                // Znajdź zgadnięte litery dla bieżącego gracza
+                QString playerGuessed = QString::fromStdString(msg.players[i].guessed_letters);
+                qDebug() << "[GameController] Player:" << playerNick << "guessed letters:" << playerGuessed;
+                if (playerNick == myNickname) {
+                    myGuessedLetters = playerGuessed;
+                    qDebug() << "[GameController] Found my letters:" << myGuessedLetters;
+                }
             }
             
-            // Jeśli to początek gry, wyślij gameStarted, w przeciwnym razie gameStateUpdated
             if (gameJustStarted) {
                 emit gameStarted(msg.game_id, hiddenWord, qplayers, myNickname);
-            } else {
-                emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, guessedLetters);
             }
+            emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);
         };
+
+        client->onPlayerEliminated = [this]() {
+            qDebug() << "Player eliminated from game";
+            emit playerEliminated();
+        };
+        
+        client->onGameEnd = [this]() {
+            qDebug() << "Game ended (room closed or host left)";
+            emit roomClosed();
+        };
+        
     }                           
 
 void GameController::loginRequested(const QString &login)
@@ -157,4 +182,30 @@ void GameController::guessLetterRequested(QChar letter)
         qDebug() << "Error guessing letter:" << QString::fromStdString(reason);
     };
     client->guessLetter(letter.toLower().toLatin1());
+}
+
+void GameController::exitGameRequested()
+{
+    qDebug() << "Exit game requested";
+    client->onExitGameOk = [this]() {
+        qDebug() << "Exited game successfully";
+        emit exitedGame();
+    };
+    client->onExitGameFail = [this]() {
+        qDebug() << "Failed to exit game";
+    };
+    client->exitGame();
+}
+
+void GameController::exitRoomRequested()
+{
+    qDebug() << "Exit room requested";
+    client->onExitRoomOk = [this]() {
+        qDebug() << "Exited room successfully";
+        emit exitedRoom();
+    };
+    client->onExitRoomFail = [this]() {
+        qDebug() << "Failed to exit room";
+    };
+    client->exitRoom();
 }

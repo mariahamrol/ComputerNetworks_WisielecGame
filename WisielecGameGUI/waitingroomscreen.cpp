@@ -40,6 +40,13 @@ WaitingRoomScreen::WaitingRoomScreen(QWidget *parent)
     buttonFont.setPointSize(25);
     startButton->setFont(buttonFont);
     main->addWidget(startButton);
+    
+    // Przycisk Exit
+    QPushButton *exitButton = new QPushButton("Exit Room", this);
+    exitButton->setFont(buttonFont);
+    exitButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; }");
+    connect(exitButton, &QPushButton::clicked, this, &WaitingRoomScreen::exitRoom);
+    main->addWidget(exitButton);
 
     ownerLabel = new QLabel(this);
     ownerLabel->setAlignment(Qt::AlignCenter);

@@ -19,19 +19,31 @@ public:
     void setHiddenWord(const QString &word);
     void setPlayers(const std::vector<QString> &players, const QString &myNick);
     void updateGameState(const QString &word, const std::vector<int> &lives);
-    void updateGameState(const QString &word, const std::vector<int> &lives, const QString &guessedLetters);
+    void updateGameState(const QString &word, const std::vector<QString> &players, const std::vector<int> &lives, const std::vector<int> &points, const QString &guessedLetters, const QString &myGuessedLetters);
     void incrementMyMistakes();
+    void updateMyMistakes(int mistakes);
     void resetKeyboard();
-    void disableGuessedLetters(const QString &guessedLetters);
+    void disableGuessedLetters(const QString &guessedLetters, const QString &myGuessedLetters);
+    void disablePlayer();
 
 signals:
     void letterClicked(QChar letter);
+    void exitGame();
 
 private:
+    bool isEliminated = false;
     QLabel *wordLabel;
     QGridLayout *keyboardLayout;
     QMap<QChar, QPushButton*> letterButtons;
     QString currentWord;
+    
+    // Hangman widgets
+    Hangman *myHangman;
+    QLabel *myNickLabel;
+    QLabel *myPointsLabel;
+    QMap<QString, Hangman*> otherHangmans;
+    QMap<QString, QLabel*> otherNickLabels;
+    QHBoxLayout *otherHangmansLayout;
 };
 
 #endif // GAMESCREEN_H

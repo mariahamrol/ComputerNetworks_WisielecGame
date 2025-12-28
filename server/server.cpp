@@ -491,14 +491,12 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	client->points = 0;
 	memset(client->guessed_letters, 0, ALPHABET_SIZE);
 	client->state = STATE_IN_ROOM;
-
-	printf("Klient %s dołączył do gry id=%d\n owner = %s\n", client->nick, game->id, game->owner);
-
-	//To jesy kluczowe zmieniamy payload dzieki temu klient może poprawnie odebrać wiadomość
+	printf("Klient %s dołączył do gry id=%d owner = %s\n", client->nick, game->id, game->owner);
 	MsgRoomInfo info;
     memset(&info, 0, sizeof(info));
     info.game_id = game->id;
     info.players_count = game->player_count;
+	
     strncpy(info.owner, game->owner, MAX_NICK_LEN - 1);
     info.owner[MAX_NICK_LEN - 1] = '\0';
     // fill player nicknames
@@ -622,7 +620,9 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 		}
 		return;
 	}
-	if (client->is_owner) {
+	// delete ROOM when disconeccting player is the owner and the game is not started yet
+	// delete GAME with is active (so the game is in progress ) will not occur in this case 
+	if (client->is_owner && !game->active) { 
 		delete_game(game->id);
 	} else {
 		auto& players = game->players;
@@ -687,9 +687,9 @@ void handle_create_room(std::shared_ptr<Client> client) {
     // ID gry
 	game.id = next_game_id++;
 	
-
     // Owner
-    strncpy(game.owner, client->nick, sizeof(game.owner) - 1);
+    strncpy(game.owner, client->nick, sizeof(client->nick) - 1);
+	game.owner[sizeof(game.owner) - 1] = '\0';
 
     // Gracze
     game.players[0] = client->fd;
@@ -820,7 +820,12 @@ void graceful_shutdown() {
     printf("Serwer się wyłącza – informuję klientów\n");
 
     for (auto& [fd, client] : clients) {
-		user_exit_game(client);
+        if(client->state == STATE_IN_GAME){
+            user_exit_game(client);
+        }
+        if(client->state == STATE_IN_ROOM){
+            user_exit_room(client);
+        }
         send_msg(fd, MSG_SERVER_SHUTDOWN, nullptr, 0);
         shutdown(fd, SHUT_RDWR); // wysyła FIN
         close(fd);

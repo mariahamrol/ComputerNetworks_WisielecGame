@@ -58,6 +58,12 @@ void ClientConnection::login(const std::string& nick) {
     send_msg(sock, MSG_LOGIN_REQ, &req, sizeof(req));
 }
 
+void ClientConnection::adminLogin(const std::string& password) {
+    MsgAdminLoginReq req{};
+    strncpy(req.password, password.c_str(), sizeof(req.password) - 1);
+    send_msg(sock, MSG_ADMIN_LOGIN_REQ, &req, sizeof(req));
+}
+
 void ClientConnection::createRoom() {
     send_msg(sock, MSG_CREATE_ROOM_REQ, nullptr, 0);
 }
@@ -79,6 +85,15 @@ void ClientConnection::exitGame() {
 }
 void ClientConnection::exitRoom() {
 	send_msg(sock, MSG_EXIT_ROOM_REQ, nullptr, 0);
+}
+
+void ClientConnection::adminListGames() {
+    send_msg(sock, MSG_ADMIN_LIST_GAMES_REQ, nullptr, 0);
+}
+
+void ClientConnection::adminTerminateGame(uint32_t gameId) {
+    MsgGameIdReq req{ gameId };
+    send_msg(sock, MSG_ADMIN_TERMINATE_GAME, &req, sizeof(req));
 }
 
 void ClientConnection::recvLoop() {
@@ -113,6 +128,26 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             break;
         case MSG_LOGIN_TAKEN:
             if (onLoginTaken) onLoginTaken();
+            break;
+        case MSG_ADMIN_PASSWORD_REQUIRED:
+            if (onError) onError("Admin password required");
+            break;
+        case MSG_ADMIN_LOGIN_OK:
+            if (onError) onError("Admin logged in");
+            break;
+        case MSG_ADMIN_LOGIN_FAIL:
+            if (onError) onError("Admin login failed");
+            break;
+        case MSG_ADMIN_GAMES_LIST: {
+            MsgAdminGamesList list = *(MsgAdminGamesList*)payload;
+            if (onAdminGamesList) onAdminGamesList(list);
+            break;
+        }
+        case MSG_ADMIN_TERMINATE_OK:
+            if (onAdminTerminateOk) onAdminTerminateOk();
+            break;
+        case MSG_ADMIN_TERMINATE_FAIL:
+            if (onAdminTerminateFail) onAdminTerminateFail();
             break;
 		case MSG_LOBBY_STATE: {
 			MsgLobbyState copy = *(MsgLobbyState*)payload;

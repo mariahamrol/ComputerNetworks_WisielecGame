@@ -102,6 +102,22 @@ int main() {
 	client.onError = [](const std::string& msg) {
 		std::cout << msg << "\n";
 	};
+	client.onAdminGamesList = [](const MsgAdminGamesList& list) {
+		std::cout << "=== Aktywne gry (admin) ===\n";
+		uint32_t totalPlayers = 0;
+		for (uint32_t i = 0; i < list.games_count; ++i) {
+			std::cout << "Gra " << list.games[i].game_id
+					  << " (" << (int)list.games[i].players_count << " graczy)\n";
+			totalPlayers += list.games[i].players_count;
+		}
+		std::cout << "Razem gier: " << list.games_count << ", razem graczy: " << totalPlayers << "\n";
+	};
+	client.onAdminTerminateOk = [] {
+		std::cout << "Gra zakończona przez admina\n";
+	};
+	client.onAdminTerminateFail = [] {
+		std::cout << "Nie udało się zakończyć gry (admin)\n";
+	};
 
     // --- start ---
     if (!client.connectToServer("127.0.0.1", 12345)) {
@@ -114,21 +130,36 @@ int main() {
     std::cin >> nick;
 
     client.login(nick);
+	if (nick == "admin") {
+		std::string pwd;
+		std::cout << "Hasło admina: ";
+		std::cin >> pwd;
+		client.adminLogin(pwd);
+	}
 
 
 
     // --- pętla UI (TYLKO UI!) ---
     while (true) {
         char c;
-		 std::cout << "c - crate game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game. d - exit room: ";
+		 std::cout << "c - create game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game, d - exit room, a - admin list, x - admin terminate: ";
         std::cin >> c;
 
         if (c == 'c') {
             client.createRoom();
-        }
+		}
         if (c == 'q') {
             break;
         }
+		else if (c == 'a') {
+			client.adminListGames();
+		}
+		else if (c == 'x') {
+			uint32_t gid;
+			std::cout << "ID gry do zakończenia: ";
+			std::cin >> gid;
+			client.adminTerminateGame(gid);
+		}
 		else if (c == 'l') {
 			auto lobby = client.getLastLobbyState();
 			if (!lobby) {

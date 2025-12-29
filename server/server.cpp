@@ -25,6 +25,8 @@
 
 #define MAX_EVENTS 128
 
+const char* admin_pwd = "3edcvfr4";
+
 static uint32_t next_game_id = 1;
 volatile sig_atomic_t server_running = 1;
 
@@ -34,6 +36,9 @@ std::unordered_map<uint32_t, Game> games;
 
 // --- Forward Declarations ---
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
+void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg);
+void handle_admin_list_games(std::shared_ptr<Client> client);
+void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg);
 void handle_create_room(std::shared_ptr<Client> client);
 void disconnect_client(int cfd, int epoll_fd);
 void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* payload);
@@ -226,6 +231,15 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
         case MSG_LOGIN_REQ:
             handle_login(client, (MsgLoginReq*)payload);
             break;
+		case MSG_ADMIN_LIST_GAMES_REQ:
+			handle_admin_list_games(client);
+			break;
+		case MSG_ADMIN_LOGIN_REQ:
+			handle_admin_login(client, (MsgAdminLoginReq*)payload);
+			break;
+		case MSG_ADMIN_TERMINATE_GAME:
+			handle_admin_terminate_game(client, (MsgGameIdReq*)payload);
+			break;
 		case MSG_CREATE_ROOM_REQ:
 			handle_create_room(client);
 			break;
@@ -532,7 +546,16 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 
 	printf("Logowanie klienta (fd=%d) nick=%s\n", client->fd, received_nick);
     
-    
+
+	if (strcmp(received_nick, "admin") == 0) {
+		client->state = STATE_WAIT_ADMIN_PASSWORD;
+		client->is_admin = false;
+        strcpy(client->nick, "admin");
+        send_msg(client->fd, MSG_ADMIN_PASSWORD_REQUIRED, nullptr, 0);
+		printf("Oczekiwanie na hasło admina (fd=%d)\n", client->fd);
+        return;
+	}
+
 	bool nick_taken = false;
 
 	for (auto const& [fd, other] : clients) {
@@ -546,17 +569,72 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 		}
 	}
 
-    if (nick_taken) {
-        send_msg(client->fd, MSG_LOGIN_TAKEN, nullptr, 0);
-        return;
-    }
-    
-    strcpy(client->nick, received_nick);
-    client->state = STATE_LOBBY;
-    send_msg(client->fd, MSG_LOGIN_OK, nullptr, 0);
-    send_lobby_state(client);
+	if (nick_taken) {
+		send_msg(client->fd, MSG_LOGIN_TAKEN, nullptr, 0);
+		return;
+	}
 
-    printf("Klient zalogowany: %s (fd=%d)\n", client->nick, client->fd);
+	strcpy(client->nick, received_nick);
+	client->state = STATE_LOBBY;
+	send_msg(client->fd, MSG_LOGIN_OK, nullptr, 0);
+	send_lobby_state(client);
+
+	printf("Klient zalogowany: %s (fd=%d)\n", client->nick, client->fd);
+
+}
+
+void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg) {
+	if (client->state != STATE_WAIT_ADMIN_PASSWORD) {
+		printf("Nieprawidłowa próba logowania admina przez (fd=%d)\n", client->fd);
+		send_msg(client->fd, MSG_ADMIN_LOGIN_FAIL, nullptr, 0);
+		return;
+	}
+
+    if (strcmp(msg->password, admin_pwd) == 0) {
+        client->state = STATE_ADMIN;
+        client->is_admin = true;
+
+        send_msg(client->fd, MSG_ADMIN_LOGIN_OK, nullptr, 0);
+        printf("Admin zalogowany (fd=%d)\n", client->fd);
+    } else {
+        send_msg(client->fd, MSG_ADMIN_LOGIN_FAIL, nullptr, 0);
+        printf("Nieudana próba logowania admina (fd=%d)\n", client->fd);
+    }
+}
+
+void handle_admin_list_games(std::shared_ptr<Client> client) {
+	if (!client->is_admin) {
+		printf("Nieautoryzowana próba pobrania listy gier (fd=%d)\n", client->fd);
+		return;
+	}
+	MsgAdminGamesList list{};
+	list.games_count = 0;
+	for (const auto& [id, game] : games) {
+		if (!game.active) continue; // tylko trwające gry
+		if (list.games_count >= MAX_GAMES) break;
+		list.games[list.games_count].game_id = game.id;
+		list.games[list.games_count].players_count = (uint8_t)game.player_count;
+		list.games_count++;
+	}
+	send_msg(client->fd, MSG_ADMIN_GAMES_LIST, &list, sizeof(list));
+}
+
+void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
+	if (!client->is_admin) {
+		printf("Nieautoryzowana próba zakończenia gry (fd=%d)\n", client->fd);
+		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
+		return;
+	}
+	Game* game = find_game_by_id(msg->game_id);
+	if (game == nullptr || !game->active) {
+		printf("Nie można zakończyć gry id=%d – nie istnieje lub nieaktywna\n", msg->game_id);
+		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
+		return;
+	}
+	delete_game(msg->game_id);
+	send_msg(client->fd, MSG_ADMIN_TERMINATE_OK, nullptr, 0);
+	// po zakończeniu wyślij adminowi aktualną listę
+	handle_admin_list_games(client);
 }
 
 void delete_game(uint32_t game_id) {

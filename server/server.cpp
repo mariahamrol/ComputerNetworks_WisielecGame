@@ -80,7 +80,8 @@ int main() {
     sockaddr_in sa{};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(12345);
-    sa.sin_addr.s_addr = inet_addr("127.0.0.1");
+	sa.sin_addr.s_addr = INADDR_ANY;
+    // sa.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     if (bind(sfd, (sockaddr*)&sa, sizeof(sa)) < 0) {
         perror("bind");
@@ -92,7 +93,7 @@ int main() {
 		close(sfd);
 		return 1;
 	}
-    printf("Serwer nasłuchuje na 127.0.0.1:12345\n");
+    printf("Serwer nasłuchuje na wszystkich ip na porcie 12345\n");
     set_non_blocking(sfd);
 
     int epoll_fd = epoll_create1(0);
@@ -549,7 +550,6 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 
 	if (strcmp(received_nick, "admin") == 0) {
 		client->state = STATE_WAIT_ADMIN_PASSWORD;
-		client->is_admin = false;
         strcpy(client->nick, "admin");
         send_msg(client->fd, MSG_ADMIN_PASSWORD_REQUIRED, nullptr, 0);
 		printf("Oczekiwanie na hasło admina (fd=%d)\n", client->fd);
@@ -590,9 +590,8 @@ void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg) {
 		return;
 	}
 
-    if (strcmp(msg->password, admin_pwd) == 0) {
-        client->state = STATE_ADMIN;
-        client->is_admin = true;
+	if (strcmp(msg->password, admin_pwd) == 0) {
+		client->state = STATE_ADMIN;
 
         send_msg(client->fd, MSG_ADMIN_LOGIN_OK, nullptr, 0);
         printf("Admin zalogowany (fd=%d)\n", client->fd);
@@ -603,7 +602,7 @@ void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg) {
 }
 
 void handle_admin_list_games(std::shared_ptr<Client> client) {
-	if (!client->is_admin) {
+	if (client->state != STATE_ADMIN) {
 		printf("Nieautoryzowana próba pobrania listy gier (fd=%d)\n", client->fd);
 		return;
 	}
@@ -620,7 +619,7 @@ void handle_admin_list_games(std::shared_ptr<Client> client) {
 }
 
 void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
-	if (!client->is_admin) {
+	if (client->state != STATE_ADMIN) {
 		printf("Nieautoryzowana próba zakończenia gry (fd=%d)\n", client->fd);
 		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
 		return;

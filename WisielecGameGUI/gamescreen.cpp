@@ -24,7 +24,7 @@ GameScreen::GameScreen(QWidget *parent)
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
 
-    wordLabel = new QLabel("_ _ _ _ _");
+    wordLabel = new QLabel();
     QFont wordFont = appFont;
     wordFont.setPointSize(28);
     wordFont.setBold(true);

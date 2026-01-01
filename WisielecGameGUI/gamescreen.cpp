@@ -5,7 +5,7 @@
 #include <QDebug>
 #include <QFontDatabase>
 
-#define MAX_LIVES 8
+#define MAX_LIVES 10
 
 GameScreen::GameScreen(QWidget *parent)
     : QWidget(parent), isEliminated(false)

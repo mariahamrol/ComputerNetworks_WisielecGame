@@ -537,6 +537,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	}
 
 	broadcast_lobby_state();
+	brodcast_game_state(*game);
 }
 
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
@@ -670,6 +671,7 @@ void user_exit_room(std::shared_ptr<Client> client) {
 		}
 		return;
 	}
+	
 	delete_player_from_game(client);
 }
 
@@ -727,6 +729,9 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
 	}
 
+	brodcast_game_state(*game);
+	broadcast_lobby_state();
+
 }
 
 void disconnect_client(int cfd, int epoll_fd) {
@@ -754,7 +759,7 @@ void disconnect_client(int cfd, int epoll_fd) {
 void handle_create_room(std::shared_ptr<Client> client) {
 	printf("Obsługa CREATE_ROOM_REQ od %s (fd=%d)\n", client->nick, client->fd);
     if (client->state != STATE_LOBBY) {
-		if (send_msg(client->fd, MSG_CREATE_GAME_FAIL, nullptr, 0) != 0) {
+		if (send_msg(client->fd, MSG_CREATE_ROOM_FAIL, nullptr, 0) != 0) {
 			perror("send_msg CREATE_GAME_FAIL");
 		}
         return;

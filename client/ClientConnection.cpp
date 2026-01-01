@@ -230,6 +230,9 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_EXIT_ROOM_FAIL:
 			if (onExitRoomFail) onExitRoomFail();
 			break;
+		case MSG_CREATE_ROOM_FAIL:
+			if (onCreateRoomFail) onCreateRoomFail();
+			break;
         default:
 			// Nieznany typ wiadomości
 			break;

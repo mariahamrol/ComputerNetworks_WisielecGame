@@ -68,7 +68,7 @@ GameController::GameController(QObject *parent)
                 }
             }
             
-            if (gameJustStarted) {
+            if (gameJustStarted && msg.word_length > 0) {
                 emit gameStarted(msg.game_id, hiddenWord, qplayers, myNickname);
             }
             emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);

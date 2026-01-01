@@ -35,6 +35,7 @@ private:
     QLabel *wordLabel;
     QGridLayout *keyboardLayout;
     QMap<QChar, QPushButton*> letterButtons;
+    QSet<QChar> clickedLetters;  // Lokalnie śledzone kliknięte litery
     QString currentWord;
     
     // Hangman widgets

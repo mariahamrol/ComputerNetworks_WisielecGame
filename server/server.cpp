@@ -461,6 +461,7 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	}
 	
 	brodcast_game_state(*game);
+	broadcast_lobby_state();
 }
 
 
@@ -659,6 +660,7 @@ void delete_game(uint32_t game_id) {
 		games.erase(it);
 		printf("Gra id=%d zakończona i usunięta\n", game_id);
 	}
+	broadcast_lobby_state();
 }
 void user_exit_room(std::shared_ptr<Client> client) {	
 	if (client->game_id == -1 || client->state != STATE_IN_ROOM) {

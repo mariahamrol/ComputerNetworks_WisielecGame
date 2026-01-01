@@ -28,7 +28,7 @@ StartScreen::StartScreen(QWidget *parent)
 
     //Picture just so there is something happening here
     picture = new QLabel();
-    QPixmap pixmap("C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/WisielecGameGUI/assets/icons/wisielec.png");
+    QPixmap pixmap("./assets/icons/wisielec.png");
     if (!pixmap.isNull()) {
         picture->setPixmap(pixmap.scaled(250, 250, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }

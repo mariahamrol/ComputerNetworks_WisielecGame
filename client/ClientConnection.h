@@ -36,6 +36,13 @@ public:
     std::function<void(const std::string&)> onError;
 	std::optional<MsgLobbyState> getLastLobbyState();
 	std::optional<MsgGameState> getLastGameState();
+    // Admin callbacks
+    std::function<void(const MsgAdminGamesList&)> onAdminGamesList;
+    std::function<void()> onAdminTerminateOk;
+    std::function<void()> onAdminTerminateFail;
+    std::function<void()> onAdminPasswordRequired;
+    std::function<void()> onAdminLoginOk;
+    std::function<void()> onAdminLoginFail;
 	
     ClientConnection();
     ~ClientConnection();
@@ -45,12 +52,16 @@ public:
 
     // --- API dla GUI ---
     void login(const std::string& nick);
+    void adminLogin(const std::string& password);
     void createRoom();
     void joinRoom(uint32_t roomId);
 	void startGame(uint32_t roomId);
 	void guessLetter(char letter);
 	void exitGame();
 	void exitRoom();
+    // Admin API
+    void adminListGames();
+    void adminTerminateGame(uint32_t gameId);
 
 private:
     int sock = -1;

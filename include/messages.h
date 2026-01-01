@@ -18,6 +18,10 @@ typedef struct {
 } MsgLoginReq;
 
 typedef struct {
+    char password[32];
+} MsgAdminLoginReq;
+
+typedef struct {
     uint32_t game_id;
 }  MsgGameIdReq;
 
@@ -48,6 +52,17 @@ typedef struct {
     uint32_t game_id;
     uint8_t players_count;
 } LobbyGameInfo;
+
+/* ===== ADMIN MESSAGES ===== */
+typedef struct {
+    uint32_t game_id;
+    uint8_t players_count;
+} AdminGameInfo;
+
+typedef struct {
+    uint32_t games_count;
+    AdminGameInfo games[MAX_GAMES];
+} MsgAdminGamesList;
 
 /* ===== GAME STATE ===== */
 

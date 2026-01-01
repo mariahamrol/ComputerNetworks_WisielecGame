@@ -83,6 +83,33 @@ GameController::GameController(QObject *parent)
             qDebug() << "Game ended (room closed or host left)";
             emit roomClosed();
         };
+
+        // Admin callbacks
+        client->onAdminPasswordRequired = [this]() {
+            qDebug() << "Admin password required";
+            emit adminPasswordRequired();
+        };
+        client->onAdminLoginOk = [this]() {
+            qDebug() << "Admin login OK";
+            emit adminLoginOk();
+        };
+        client->onAdminLoginFail = [this]() {
+            qDebug() << "Admin login FAIL";
+            emit adminLoginFail();
+        };
+        client->onAdminGamesList = [this](const MsgAdminGamesList &list) {
+            std::vector<std::pair<int,int>> data;
+            for (uint32_t i = 0; i < list.games_count; ++i) {
+                data.emplace_back((int)list.games[i].game_id, (int)list.games[i].players_count);
+            }
+            emit adminGamesListUpdated(data);
+        };
+        client->onAdminTerminateOk = [this]() {
+            emit adminTerminateOk();
+        };
+        client->onAdminTerminateFail = [this]() {
+            emit adminTerminateFail();
+        };
         
     }                           
 
@@ -208,4 +235,16 @@ void GameController::exitRoomRequested()
         qDebug() << "Failed to exit room";
     };
     client->exitRoom();
+}
+
+void GameController::adminLoginRequested(const QString &password) {
+    client->adminLogin(password.toStdString());
+}
+
+void GameController::adminListGamesRequested() {
+    client->adminListGames();
+}
+
+void GameController::adminTerminateGameRequested(int gameId) {
+    client->adminTerminateGame((uint32_t)gameId);
 }

@@ -69,6 +69,8 @@ qt_add_executable(WisielecGameGUI
     lobbyscreen.cpp
     gamecontroller.cpp
     hangman.cpp
+    adminloginscreen.cpp
+    adminlobbyscreen.cpp
     ../client/ClientConnection.cpp
     ../include/net.cpp
 )

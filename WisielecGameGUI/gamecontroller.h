@@ -19,6 +19,10 @@ public slots:
     void guessLetterRequested(QChar letter);
     void exitGameRequested();
     void exitRoomRequested();
+    // Admin slots
+    void adminLoginRequested(const QString &password);
+    void adminListGamesRequested();
+    void adminTerminateGameRequested(int gameId);
     // bool give_mistakes = true;
 
 signals:
@@ -35,6 +39,13 @@ signals:
     void exitedGame();
     void exitedRoom();
     void roomClosed();
+    // Admin signals
+    void adminPasswordRequired();
+    void adminLoginOk();
+    void adminLoginFail();
+    void adminGamesListUpdated(const std::vector<std::pair<int,int>> &games); // game_id, players_count
+    void adminTerminateOk();
+    void adminTerminateFail();
 private:
     ClientConnection *client;
     QString myNickname;

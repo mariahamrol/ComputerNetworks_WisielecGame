@@ -40,6 +40,9 @@ public:
     std::function<void(const MsgAdminGamesList&)> onAdminGamesList;
     std::function<void()> onAdminTerminateOk;
     std::function<void()> onAdminTerminateFail;
+    std::function<void()> onAdminPasswordRequired;
+    std::function<void()> onAdminLoginOk;
+    std::function<void()> onAdminLoginFail;
 	
     ClientConnection();
     ~ClientConnection();

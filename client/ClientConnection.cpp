@@ -130,13 +130,13 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             if (onLoginTaken) onLoginTaken();
             break;
         case MSG_ADMIN_PASSWORD_REQUIRED:
-            if (onError) onError("Admin password required");
+            if (onAdminPasswordRequired) onAdminPasswordRequired();
             break;
         case MSG_ADMIN_LOGIN_OK:
-            if (onError) onError("Admin logged in");
+            if (onAdminLoginOk) onAdminLoginOk();
             break;
         case MSG_ADMIN_LOGIN_FAIL:
-            if (onError) onError("Admin login failed");
+            if (onAdminLoginFail) onAdminLoginFail();
             break;
         case MSG_ADMIN_GAMES_LIST: {
             MsgAdminGamesList list = *(MsgAdminGamesList*)payload;

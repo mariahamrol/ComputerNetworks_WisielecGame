@@ -2,7 +2,8 @@
 #include "../client/ClientConnection.h"
 
 int main() {
-    ClientConnection client;
+	ClientConnection client;
+	bool adminMode = false;
 
     // --- reakcje na zdarzenia ---
     client.onLoginOk = [] {
@@ -118,6 +119,16 @@ int main() {
 	client.onAdminTerminateFail = [] {
 		std::cout << "Nie udało się zakończyć gry (admin)\n";
 	};
+	client.onAdminPasswordRequired = [] {
+		std::cout << "Wymagane hasło admina\n";
+	};
+	client.onAdminLoginOk = [&adminMode] {
+		adminMode = true;
+		std::cout << "Zalogowano jako admin\n";
+	};
+	client.onAdminLoginFail = [] {
+		std::cout << "Błędne hasło admina\n";
+	};
 
     // --- start ---
     if (!client.connectToServer("127.0.0.1", 12345)) {
@@ -140,27 +151,31 @@ int main() {
 
 
     // --- pętla UI (TYLKO UI!) ---
-    while (true) {
-        char c;
-		 std::cout << "c - create game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game, d - exit room, a - admin list, x - admin terminate: ";
-        std::cin >> c;
+	while (true) {
+		char c;
+		if (adminMode) {
+			std::cout << "a - lista gier, x - zakończ grę, q - wyjdź: ";
+		} else {
+			std::cout << "c - create game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game, d - exit room: ";
+		}
+		std::cin >> c;
 
-        if (c == 'c') {
+		if (!adminMode && c == 'c') {
             client.createRoom();
 		}
         if (c == 'q') {
             break;
         }
-		else if (c == 'a') {
+		else if (adminMode && c == 'a') {
 			client.adminListGames();
 		}
-		else if (c == 'x') {
+		else if (adminMode && c == 'x') {
 			uint32_t gid;
 			std::cout << "ID gry do zakończenia: ";
 			std::cin >> gid;
 			client.adminTerminateGame(gid);
 		}
-		else if (c == 'l') {
+		else if (!adminMode && c == 'l') {
 			auto lobby = client.getLastLobbyState();
 			if (!lobby) {
 				std::cout << "Brak danych lobby (jeszcze nie otrzymano)\n";
@@ -176,29 +191,29 @@ int main() {
 				std::cout << "=============\n";
 			}
 		}
-		else if (c == 'j') {
+		else if (!adminMode && c == 'j') {
 			uint32_t roomId;
 			std::cout << "ID pokoju do dołączenia: ";
 			std::cin >> roomId;
 			client.joinRoom(roomId);
 		}
-		else if (c == 's') {
+		else if (!adminMode && c == 's') {
 			uint32_t roomId;
 			std::cout << "ID pokoju do rozpoczęcia: ";
 			std::cin >> roomId;
 			client.startGame(roomId);	
 		}
-		else if (c == 'g') {
+		else if (!adminMode && c == 'g') {
 			char letter;
 			std::cout << "Litera do odgadnięcia: ";
 			std::cin >> letter;
 			client.guessLetter(letter);
 		}
-		else if (c == 'e') {
+		else if (!adminMode && c == 'e') {
 			std::cout << "Opuszczanie gry...\n";
 			client.exitGame();
 		}
-		else if (c == 'd') {
+		else if (!adminMode && c == 'd') {
 			std::cout << "Opuszczanie pokoju...\n";
 			client.exitRoom();
 		}

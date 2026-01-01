@@ -41,7 +41,7 @@ GameScreen::GameScreen(QWidget *parent)
     QWidget *keyboardWidget = new QWidget(this);
     keyboardLayout = new QGridLayout(keyboardWidget);
 
-    const QString letters = "AĄBCĆDEĘFGHIJKLŁMNŃOÓPQRSŚTUVWXYZŻŹ";
+    const QString letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     int row = 0, col = 0;
 
     for (QChar letter : letters) {
@@ -161,7 +161,7 @@ void GameScreen::setPlayers(const std::vector<QString> &players, const QString &
         
         // Wisielec
         Hangman *hangman = new Hangman(this);
-        hangman->setFixedSize(100, 100);
+        hangman->setFixedSize(200, 200);
         hangman->setMistakes(0);  // Początek z 0 błędami
         playerLayout->addWidget(hangman, 0, Qt::AlignCenter);
         otherHangmans[playerNick] = hangman;

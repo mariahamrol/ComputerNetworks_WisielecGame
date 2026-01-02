@@ -5,6 +5,8 @@
 #include <QStackedWidget>
 #include "gamecontroller.h"
 
+class AdminLoginScreen;
+class AdminLobbyScreen;
 class StartScreen;
 class LobbyScreen;
 class WaitingRoomScreen;
@@ -23,6 +25,8 @@ private:
     WaitingRoomScreen *waitingScreen;
     GameController *controller;
     GameScreen *gameScreen;
+    AdminLoginScreen *adminLoginScreen; // Added member variable
+    AdminLobbyScreen *adminLobbyScreen; // Added member variable
 };
 
 #endif

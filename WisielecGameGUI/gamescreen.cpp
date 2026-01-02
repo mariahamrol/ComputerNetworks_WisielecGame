@@ -4,8 +4,9 @@
 #include <QHBoxLayout>
 #include <QDebug>
 #include <QFontDatabase>
+#include <QSet>
 
-#define MAX_LIVES 2
+#define MAX_LIVES 10
 
 GameScreen::GameScreen(QWidget *parent)
     : QWidget(parent), isEliminated(false)
@@ -40,7 +41,7 @@ GameScreen::GameScreen(QWidget *parent)
     QWidget *keyboardWidget = new QWidget(this);
     keyboardLayout = new QGridLayout(keyboardWidget);
 
-    const QString letters = "AĄBCĆDEĘFGHIJKLŁMNŃOÓPQRSŚTUVWXYZŻŹ";
+    const QString letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     int row = 0, col = 0;
 
     for (QChar letter : letters) {
@@ -53,6 +54,7 @@ GameScreen::GameScreen(QWidget *parent)
 
         connect(btn, &QPushButton::clicked, this, [=]() {
             btn->setEnabled(false);
+            clickedLetters.insert(letter);  // Zapamiętaj klikniętą literę
             emit letterClicked(letter);
             qDebug() << "Letter clicked:" << letter;
         });
@@ -159,7 +161,7 @@ void GameScreen::setPlayers(const std::vector<QString> &players, const QString &
         
         // Wisielec
         Hangman *hangman = new Hangman(this);
-        hangman->setFixedSize(100, 100);
+        hangman->setFixedSize(200, 200);
         hangman->setMistakes(0);  // Początek z 0 błędami
         playerLayout->addWidget(hangman, 0, Qt::AlignCenter);
         otherHangmans[playerNick] = hangman;
@@ -179,7 +181,8 @@ void GameScreen::setPlayers(const std::vector<QString> &players, const QString &
 
 void GameScreen::updateGameState(const QString &word, const std::vector<QString> &players, const std::vector<int> &lives, const std::vector<int> &points, const QString &guessedLetters, const QString &myGuessedLetters) {
     // Sprawdź czy to nowe słowo (nowa tura)
-    if (currentWord != word) {
+    bool isNewWord = (currentWord != word);
+    if (isNewWord) {
         currentWord = word;
         resetKeyboard();  // Nowe słowo = reset klawiatury
         qDebug() << "New word detected - keyboard reset";
@@ -188,7 +191,7 @@ void GameScreen::updateGameState(const QString &word, const std::vector<QString>
     // Zaktualizuj wyświetlane słowo (od serwera)
     wordLabel->setText(word);
     
-    // Dezaktywuj zgadnięte litery (globalnie i dla gracza)
+    // Zawsze dezaktywuj zgadnięte litery z serwera + lokalnie kliknięte
     disableGuessedLetters(guessedLetters, myGuessedLetters);
     
     // Zaktualizuj wisielce i punkty na podstawie żyć
@@ -230,6 +233,9 @@ void GameScreen::resetKeyboard() {
         return;
     }
     
+    // Wyczyść lokalnie zapamiętane kliknięte litery
+    clickedLetters.clear();
+    
     // Włącz wszystkie przyciski
     for (auto btn : letterButtons) {
         btn->setEnabled(true);
@@ -245,24 +251,27 @@ void GameScreen::disableGuessedLetters(const QString &guessedLetters, const QStr
     // Dezaktywuj litery które zostały poprawnie zgadnięte (dla wszystkich graczy)
     for (QChar letter : guessedLetters) {
         QChar upperLetter = letter.toUpper();
-        qDebug() << "[GameScreen] Checking global letter:" << letter << "-> upper:" << upperLetter;
         if (letterButtons.contains(upperLetter)) {
             letterButtons[upperLetter]->setEnabled(false);
             qDebug() << "[GameScreen] Disabled button for all:" << upperLetter;
-        } else {
-            qDebug() << "[GameScreen] Button not found for:" << upperLetter;
         }
     }
     
     // Dezaktywuj litery które zgadł ten gracz (niezależnie czy poprawne czy nie)
     for (QChar letter : myGuessedLetters) {
         QChar upperLetter = letter.toUpper();
-        qDebug() << "[GameScreen] Checking my letter:" << letter << "-> upper:" << upperLetter;
         if (letterButtons.contains(upperLetter)) {
             letterButtons[upperLetter]->setEnabled(false);
             qDebug() << "[GameScreen] Disabled button for me:" << upperLetter;
-        } else {
-            qDebug() << "[GameScreen] Button not found for:" << upperLetter;
+        }
+    }
+    
+    // Dezaktywuj wszystkie lokalnie kliknięte litery (nawet jeśli serwer jeszcze ich nie potwierdził)
+    for (QChar letter : clickedLetters) {
+        QChar upperLetter = letter.toUpper();
+        if (letterButtons.contains(upperLetter)) {
+            letterButtons[upperLetter]->setEnabled(false);
+            qDebug() << "[GameScreen] Disabled button (locally clicked):" << upperLetter;
         }
     }
 }

@@ -23,7 +23,8 @@ GameController::GameController(QObject *parent)
         };
 
         client->onStartGameOk = [this]() {
-            qDebug() << "Game started successfully (host)";
+            qDebug() << "Waiting for game state update from server after starting game";
+            waitingForGameStart = true;
         };
 
         // Callback dla game state - wywoływany dla wszystkich graczy gdy gra się rozpocznie
@@ -67,11 +68,30 @@ GameController::GameController(QObject *parent)
                     qDebug() << "[GameController] Found my letters:" << myGuessedLetters;
                 }
             }
+        
+
+            bool isWaitingRoom = (msg.word[0] == '\0' || hiddenWord.trimmed().isEmpty());
             
-            if (gameJustStarted) {
+            if (isWaitingRoom) {
+                // W poczekalni - emituj aktualizację listy graczy (joinedGame)
+                qDebug() << "[GameController] Waiting room update - players count:" << qplayers.size();
+                // Zakładamy, że pierwszy gracz to owner (możesz to dostosować jeśli masz inną logikę)
+                QString owner = qplayers.empty() ? "" : qplayers[0];
+                if(owner == myNickname) {
+                    qDebug() << "[GameController] Emitting joinedGame as host";
+                    emit joinedGame(msg.game_id, qplayers, owner, true);
+                } else {
+                    qDebug() << "[GameController] Emitting joinedGame as participant";
+                    emit joinedGame(msg.game_id, qplayers, owner, false);}
+            } else if (waitingForGameStart) {
+                // Jeśli czekamy na start gry (po otrzymaniu onStartGameOk), emituj gameStarted
+                qDebug() << "[GameController] Emitting gameStarted with full game data";
                 emit gameStarted(msg.game_id, hiddenWord, qplayers, myNickname);
+                waitingForGameStart = false;
+            } else {
+                // Normalna aktualizacja stanu gry
+                emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);
             }
-            emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);
         };
 
         client->onPlayerEliminated = [this]() {
@@ -82,6 +102,33 @@ GameController::GameController(QObject *parent)
         client->onGameEnd = [this]() {
             qDebug() << "Game ended (room closed or host left)";
             emit roomClosed();
+        };
+
+        // Admin callbacks
+        client->onAdminPasswordRequired = [this]() {
+            qDebug() << "Admin password required";
+            emit adminPasswordRequired();
+        };
+        client->onAdminLoginOk = [this]() {
+            qDebug() << "Admin login OK";
+            emit adminLoginOk();
+        };
+        client->onAdminLoginFail = [this]() {
+            qDebug() << "Admin login FAIL";
+            emit adminLoginFail();
+        };
+        client->onAdminGamesList = [this](const MsgAdminGamesList &list) {
+            std::vector<std::pair<int,int>> data;
+            for (uint32_t i = 0; i < list.games_count; ++i) {
+                data.emplace_back((int)list.games[i].game_id, (int)list.games[i].players_count);
+            }
+            emit adminGamesListUpdated(data);
+        };
+        client->onAdminTerminateOk = [this]() {
+            emit adminTerminateOk();
+        };
+        client->onAdminTerminateFail = [this]() {
+            emit adminTerminateFail();
         };
         
     }                           
@@ -208,4 +255,16 @@ void GameController::exitRoomRequested()
         qDebug() << "Failed to exit room";
     };
     client->exitRoom();
+}
+
+void GameController::adminLoginRequested(const QString &password) {
+    client->adminLogin(password.toStdString());
+}
+
+void GameController::adminListGamesRequested() {
+    client->adminListGames();
+}
+
+void GameController::adminTerminateGameRequested(int gameId) {
+    client->adminTerminateGame((uint32_t)gameId);
 }

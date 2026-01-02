@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "startscreen.h"
 #include "lobbyscreen.h"
+#include "adminloginscreen.h"
+#include "adminlobbyscreen.h"
 #include "waitingroomscreen.h"
 #include "gamescreen.h"
 #include "gamecontroller.h"
@@ -14,8 +16,10 @@ MainWindow::MainWindow(QWidget *parent)
     stack = new QStackedWidget(this);
     //Start game screen only for entering login
     startScreen = new StartScreen(stack);
+    adminLoginScreen = new AdminLoginScreen(stack); // Changed to member variable
     //Waiting room screen our main lobby it's for choosing what game to join
     lobbyScreen = new LobbyScreen(stack);
+    adminLobbyScreen = new AdminLobbyScreen(stack); // Changed to member variable
 
     waitingScreen = new WaitingRoomScreen(stack);
     gameScreen = new GameScreen(stack);
@@ -23,15 +27,40 @@ MainWindow::MainWindow(QWidget *parent)
     controller = new GameController(this);
 
     stack->addWidget(startScreen);
+    stack->addWidget(adminLoginScreen);
     stack->addWidget(lobbyScreen);
+    stack->addWidget(adminLobbyScreen);
     stack->addWidget(waitingScreen);
     stack->addWidget(gameScreen);
 
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
 
-    connect(startScreen, &StartScreen::startClicked,
+        connect(startScreen, &StartScreen::startClicked,
             controller, &GameController::loginRequested);
+    // Admin: prompt for password when server requests
+    connect(controller, &GameController::adminPasswordRequired, this, [this]() {
+        stack->setCurrentWidget(adminLoginScreen);
+    });
+    connect(adminLoginScreen, &AdminLoginScreen::submitPassword,
+        controller, &GameController::adminLoginRequested);
+    // adminLoginFail has no arguments; adapt with a lambda to show a message
+    connect(controller, &GameController::adminLoginFail, this, [this]() {
+        adminLoginScreen->showError("Invalid admin password");
+    });
+    connect(controller, &GameController::adminLoginOk, this, [this]() {
+        stack->setCurrentWidget(adminLobbyScreen);
+        controller->adminListGamesRequested();
+    });
+    connect(controller, &GameController::adminGamesListUpdated,
+        adminLobbyScreen, &AdminLobbyScreen::displayGames);
+    connect(adminLobbyScreen, &AdminLobbyScreen::refreshRequested,
+        controller, &GameController::adminListGamesRequested);
+    connect(adminLobbyScreen, &AdminLobbyScreen::terminateRequested,
+        controller, &GameController::adminTerminateGameRequested);
+    // TODO: viewRequested could open a read-only game view; for now, refresh listing
+    connect(adminLobbyScreen, &AdminLobbyScreen::viewRequested,
+        controller, &GameController::adminListGamesRequested);
 
     // WaitingRoom → Controller
     connect(lobbyScreen, &LobbyScreen::joinGame,

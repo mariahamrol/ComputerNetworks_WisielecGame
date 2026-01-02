@@ -1,2 +1,4 @@
 build/
-.vscode/
+.vscode/server/server.exe
+server.exe
+a.out

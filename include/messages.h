@@ -7,7 +7,7 @@
 #define MAX_NICK_LEN 32
 #define MAX_WORD_LEN 64
 #define MAX_GAMES 32
-#define MAX_LIVES 2
+#define MAX_LIVES 10
 #define ALPHABET_SIZE 32
 
 
@@ -16,6 +16,10 @@
 typedef struct {
     char nick[MAX_NICK_LEN];
 } MsgLoginReq;
+
+typedef struct {
+    char password[32];
+} MsgAdminLoginReq;
 
 typedef struct {
     uint32_t game_id;
@@ -48,6 +52,17 @@ typedef struct {
     uint32_t game_id;
     uint8_t players_count;
 } LobbyGameInfo;
+
+/* ===== ADMIN MESSAGES ===== */
+typedef struct {
+    uint32_t game_id;
+    uint8_t players_count;
+} AdminGameInfo;
+
+typedef struct {
+    uint32_t games_count;
+    AdminGameInfo games[MAX_GAMES];
+} MsgAdminGamesList;
 
 /* ===== GAME STATE ===== */
 

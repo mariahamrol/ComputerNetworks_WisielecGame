@@ -673,6 +673,11 @@ void user_exit_room(std::shared_ptr<Client> client) {
 	}
 	
 	delete_player_from_game(client);
+
+	if (send_msg(client->fd, MSG_EXIT_ROOM_OK, nullptr, 0) != 0) {
+		printf("błąd przy wysyłaniu EXIT_ROOM_OK do %s (fd=%d)\n", client->nick, client->fd);
+		perror("send_msg EXIT_ROOM_OK");
+	}
 }
 
 void user_exit_game(std::shared_ptr<Client> client) {
@@ -721,7 +726,7 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 	client->points = 0;
 	memset(client->guessed_letters, 0, ALPHABET_SIZE);
 
-	if (game->player_count < 2) {
+	if (game->player_count < 2 && game->active) {
 		delete_game(game->id);
 	}
 

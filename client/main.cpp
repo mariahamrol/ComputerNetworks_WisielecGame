@@ -1,4 +1,6 @@
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include "../client/ClientConnection.h"
 
 int main() {
@@ -138,9 +140,13 @@ int main() {
 			const auto& user = list.users[i];
 			std::cout << "Nick: " << user.nick
 					  << " | Stan: " << (user.state < 7 ? states[user.state] : "UNKNOWN")
-					  << " | Gra: " << (user.game_id == -1 ? "brak" : std::to_string(user.game_id))
-					  << " | Życia: " << (int)user.lives
-					  << " | Punkty: " << user.points << "\n";
+					  << " | Gra: " << (user.game_id == -1 ? "brak" : std::to_string(user.game_id));
+			
+			if (user.game_id != -1) {
+				std::cout << " | Życia: " << (int)user.lives
+						  << " | Punkty: " << user.points;
+			}
+			std::cout << "\n";
 		}
 		std::cout << "Razem użytkowników: " << list.users_count << "\n";
 	};
@@ -196,6 +202,8 @@ int main() {
 		std::cout << "Hasło admina: ";
 		std::cin >> pwd;
 		client.adminLogin(pwd);
+		// Czekaj na odpowiedź z serwera przed pokazaniem menu
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	}
 
 

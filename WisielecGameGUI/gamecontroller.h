@@ -22,6 +22,8 @@ public slots:
     // Admin slots
     void adminLoginRequested(const QString &password);
     void adminListGamesRequested();
+    void adminListUsersRequested();
+    void adminGameDetailsRequested(int gameId);
     void adminTerminateGameRequested(int gameId);
     // bool give_mistakes = true;
 
@@ -43,7 +45,9 @@ signals:
     void adminPasswordRequired();
     void adminLoginOk();
     void adminLoginFail();
-    void adminGamesListUpdated(const std::vector<std::pair<int,int>> &games); // game_id, players_count
+    void adminGamesListUpdated(const MsgAdminGamesList &games);
+    void adminUsersListUpdated(const MsgAdminUsersList &users);
+    void adminGameDetailsUpdated(const MsgAdminGameDetails &details);
     void adminTerminateOk();
     void adminTerminateFail();
 private:

@@ -36,8 +36,8 @@ MainWindow::MainWindow(QWidget *parent)
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
 
-        connect(startScreen, &StartScreen::startClicked,
-            controller, &GameController::loginRequested);
+    connect(startScreen, &StartScreen::startClicked,
+        controller, &GameController::loginRequested);
     // Admin: prompt for password when server requests
     connect(controller, &GameController::adminPasswordRequired, this, [this]() {
         stack->setCurrentWidget(adminLoginScreen);
@@ -51,16 +51,28 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::adminLoginOk, this, [this]() {
         stack->setCurrentWidget(adminLobbyScreen);
         controller->adminListGamesRequested();
+        controller->adminListUsersRequested();
     });
     connect(controller, &GameController::adminGamesListUpdated,
         adminLobbyScreen, &AdminLobbyScreen::displayGames);
-    connect(adminLobbyScreen, &AdminLobbyScreen::refreshRequested,
-        controller, &GameController::adminListGamesRequested);
+    connect(controller, &GameController::adminUsersListUpdated,
+        adminLobbyScreen, &AdminLobbyScreen::displayUsers);
+    connect(controller, &GameController::adminGameDetailsUpdated,
+        adminLobbyScreen, &AdminLobbyScreen::displayGameDetails);
+    
     connect(adminLobbyScreen, &AdminLobbyScreen::terminateRequested,
         controller, &GameController::adminTerminateGameRequested);
-    // TODO: viewRequested could open a read-only game view; for now, refresh listing
     connect(adminLobbyScreen, &AdminLobbyScreen::viewRequested,
+        controller, &GameController::adminGameDetailsRequested);
+    connect(adminLobbyScreen, &AdminLobbyScreen::refreshGamesRequested,
         controller, &GameController::adminListGamesRequested);
+    connect(adminLobbyScreen, &AdminLobbyScreen::refreshUsersRequested,
+        controller, &GameController::adminListUsersRequested);
+    
+    // Refresh games list after terminating a game
+    connect(controller, &GameController::adminTerminateOk, this, [this]() {
+        controller->adminListGamesRequested();
+    });
 
     // WaitingRoom → Controller
     connect(lobbyScreen, &LobbyScreen::joinGame,

@@ -648,8 +648,15 @@ void handle_admin_list_users(std::shared_ptr<Client> client) {
 		user.nick[MAX_NICK_LEN - 1] = '\0';
 		user.state = (uint8_t)c->state;
 		user.game_id = c->game_id;
-		user.lives = c->lives;
-		user.points = c->points;
+		
+		// Only show lives and points for users who are actually in games (players)
+		if (c->game_id != -1 && (c->state == STATE_IN_ROOM || c->state == STATE_IN_GAME)) {
+			user.lives = c->lives;
+			user.points = c->points;
+		} else {
+			user.lives = 0;
+			user.points = 0;
+		}
 		
 		list.users_count++;
 	}

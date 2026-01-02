@@ -91,6 +91,15 @@ void ClientConnection::adminListGames() {
     send_msg(sock, MSG_ADMIN_LIST_GAMES_REQ, nullptr, 0);
 }
 
+void ClientConnection::adminListUsers() {
+    send_msg(sock, MSG_ADMIN_LIST_USERS_REQ, nullptr, 0);
+}
+
+void ClientConnection::adminGetGameDetails(uint32_t gameId) {
+    MsgGameIdReq req{ gameId };
+    send_msg(sock, MSG_ADMIN_GAME_DETAILS_REQ, &req, sizeof(req));
+}
+
 void ClientConnection::adminTerminateGame(uint32_t gameId) {
     MsgGameIdReq req{ gameId };
     send_msg(sock, MSG_ADMIN_TERMINATE_GAME, &req, sizeof(req));
@@ -141,6 +150,16 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
         case MSG_ADMIN_GAMES_LIST: {
             MsgAdminGamesList list = *(MsgAdminGamesList*)payload;
             if (onAdminGamesList) onAdminGamesList(list);
+            break;
+        }
+        case MSG_ADMIN_USERS_LIST: {
+            MsgAdminUsersList list = *(MsgAdminUsersList*)payload;
+            if (onAdminUsersList) onAdminUsersList(list);
+            break;
+        }
+        case MSG_ADMIN_GAME_DETAILS: {
+            MsgAdminGameDetails details = *(MsgAdminGameDetails*)payload;
+            if (onAdminGameDetails) onAdminGameDetails(details);
             break;
         }
         case MSG_ADMIN_TERMINATE_OK:

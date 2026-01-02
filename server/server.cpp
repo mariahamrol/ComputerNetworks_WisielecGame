@@ -38,6 +38,8 @@ std::unordered_map<uint32_t, Game> games;
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
 void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg);
 void handle_admin_list_games(std::shared_ptr<Client> client);
+void handle_admin_list_users(std::shared_ptr<Client> client);
+void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg);
 void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg);
 void handle_create_room(std::shared_ptr<Client> client);
 void disconnect_client(int cfd, int epoll_fd);
@@ -234,6 +236,12 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
             break;
 		case MSG_ADMIN_LIST_GAMES_REQ:
 			handle_admin_list_games(client);
+			break;
+		case MSG_ADMIN_LIST_USERS_REQ:
+			handle_admin_list_users(client);
+			break;
+		case MSG_ADMIN_GAME_DETAILS_REQ:
+			handle_admin_game_details(client, (MsgGameIdReq*)payload);
 			break;
 		case MSG_ADMIN_LOGIN_REQ:
 			handle_admin_login(client, (MsgAdminLoginReq*)payload);
@@ -611,13 +619,95 @@ void handle_admin_list_games(std::shared_ptr<Client> client) {
 	MsgAdminGamesList list{};
 	list.games_count = 0;
 	for (const auto& [id, game] : games) {
-		if (!game.active) continue; // tylko trwające gry
 		if (list.games_count >= MAX_GAMES) break;
 		list.games[list.games_count].game_id = game.id;
 		list.games[list.games_count].players_count = (uint8_t)game.player_count;
+		list.games[list.games_count].is_active = game.active ? 1 : 0;
+		strncpy(list.games[list.games_count].owner, game.owner, MAX_NICK_LEN - 1);
+		list.games[list.games_count].owner[MAX_NICK_LEN - 1] = '\0';
 		list.games_count++;
 	}
 	send_msg(client->fd, MSG_ADMIN_GAMES_LIST, &list, sizeof(list));
+	printf("Admin (fd=%d) pobrał listę %d gier\n", client->fd, list.games_count);
+}
+
+void handle_admin_list_users(std::shared_ptr<Client> client) {
+	if (client->state != STATE_ADMIN) {
+		printf("Nieautoryzowana próba pobrania listy użytkowników (fd=%d)\n", client->fd);
+		return;
+	}
+	
+	MsgAdminUsersList list{};
+	list.users_count = 0;
+	
+	for (const auto& [fd, c] : clients) {
+		if (list.users_count >= 64) break;
+		
+		AdminUserInfo& user = list.users[list.users_count];
+		strncpy(user.nick, c->nick, MAX_NICK_LEN - 1);
+		user.nick[MAX_NICK_LEN - 1] = '\0';
+		user.state = (uint8_t)c->state;
+		user.game_id = c->game_id;
+		user.lives = c->lives;
+		user.points = c->points;
+		
+		list.users_count++;
+	}
+	
+	send_msg(client->fd, MSG_ADMIN_USERS_LIST, &list, sizeof(list));
+	printf("Admin (fd=%d) pobrał listę %d użytkowników\n", client->fd, list.users_count);
+}
+
+void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
+	if (client->state != STATE_ADMIN) {
+		printf("Nieautoryzowana próba pobrania szczegółów gry (fd=%d)\n", client->fd);
+		return;
+	}
+	
+	Game* game = find_game_by_id(msg->game_id);
+	if (game == nullptr) {
+		printf("Admin (fd=%d) próbował pobrać szczegóły nieistniejącej gry id=%d\n", client->fd, msg->game_id);
+		send_msg(client->fd, MSG_ERROR, nullptr, 0);
+		return;
+	}
+	
+	MsgAdminGameDetails details{};
+	details.game_id = game->id;
+	details.is_active = game->active ? 1 : 0;
+	details.player_count = (uint8_t)game->player_count;
+	
+	strncpy(details.owner, game->owner, MAX_NICK_LEN - 1);
+	details.owner[MAX_NICK_LEN - 1] = '\0';
+	
+	strncpy(details.word, game->word, MAX_WORD_LEN - 1);
+	details.word[MAX_WORD_LEN - 1] = '\0';
+	
+	strncpy(details.word_guessed, game->word_guessed, MAX_WORD_LEN - 1);
+	details.word_guessed[MAX_WORD_LEN - 1] = '\0';
+	
+	memcpy(details.guessed_letters, game->guessed_letters, ALPHABET_SIZE);
+	details.word_length = game->word_length;
+	
+	// Fill player details
+	for (int i = 0; i < game->player_count && i < MAX_PLAYERS; ++i) {
+		int pfd = game->players[i];
+		auto it = clients.find(pfd);
+		if (it != clients.end()) {
+			auto& c = it->second;
+			AdminPlayerInfo& player = details.players[i];
+			
+			strncpy(player.nick, c->nick, MAX_NICK_LEN - 1);
+			player.nick[MAX_NICK_LEN - 1] = '\0';
+			player.lives = c->lives;
+			player.points = c->points;
+			player.is_active = c->is_active ? 1 : 0;
+			player.is_owner = c->is_owner ? 1 : 0;
+			memcpy(player.guessed_letters, c->guessed_letters, ALPHABET_SIZE);
+		}
+	}
+	
+	send_msg(client->fd, MSG_ADMIN_GAME_DETAILS, &details, sizeof(details));
+	printf("Admin (fd=%d) pobrał szczegóły gry id=%d\n", client->fd, game->id);
 }
 
 void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg) {

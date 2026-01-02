@@ -38,6 +38,8 @@ public:
 	std::optional<MsgGameState> getLastGameState();
     // Admin callbacks
     std::function<void(const MsgAdminGamesList&)> onAdminGamesList;
+    std::function<void(const MsgAdminUsersList&)> onAdminUsersList;
+    std::function<void(const MsgAdminGameDetails&)> onAdminGameDetails;
     std::function<void()> onAdminTerminateOk;
     std::function<void()> onAdminTerminateFail;
     std::function<void()> onAdminPasswordRequired;
@@ -61,6 +63,8 @@ public:
 	void exitRoom();
     // Admin API
     void adminListGames();
+    void adminListUsers();
+    void adminGetGameDetails(uint32_t gameId);
     void adminTerminateGame(uint32_t gameId);
 
 private:

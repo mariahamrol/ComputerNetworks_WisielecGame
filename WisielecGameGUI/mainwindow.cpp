@@ -5,7 +5,10 @@
 #include "adminlobbyscreen.h"
 #include "waitingroomscreen.h"
 #include "gamescreen.h"
+#include "gameendscreen.h"
 #include "gamecontroller.h"
+#include <QDebug>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     waitingScreen = new WaitingRoomScreen(stack);
     gameScreen = new GameScreen(stack);
+    gameEndScreen = new GameEndScreen(stack);
 
     controller = new GameController(this);
 
@@ -32,6 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
     stack->addWidget(adminLobbyScreen);
     stack->addWidget(waitingScreen);
     stack->addWidget(gameScreen);
+    stack->addWidget(gameEndScreen);
 
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
@@ -166,6 +171,36 @@ MainWindow::MainWindow(QWidget *parent)
     
     connect(controller, &GameController::roomClosed, this, [&]() {
         qDebug() << "[MainWindow] Room closed (host left), returning to lobby";
+        stack->setCurrentWidget(lobbyScreen);
+    });
+    
+    // Handle start game failure
+    connect(controller, &GameController::startGameFailed, this, [this]() {
+        QMessageBox::warning(this, "Cannot Start Game", 
+                           "Not enough players! You need at least 2 players to start the game.",
+                           QMessageBox::Ok);
+    });
+    
+    // Handle game ended with results
+    connect(controller, &GameController::gameEnded, this, 
+        [this](std::vector<QString> playerNames, std::vector<int> points, std::vector<bool> wasActive) {
+        qDebug() << "[MainWindow] Game ended, showing results";
+        
+        std::vector<PlayerResult> results;
+        for (size_t i = 0; i < playerNames.size(); ++i) {
+            PlayerResult result;
+            result.nick = playerNames[i];
+            result.points = points[i];
+            result.wasActive = wasActive[i];
+            results.push_back(result);
+        }
+        
+        gameEndScreen->displayResults(results);
+        stack->setCurrentWidget(gameEndScreen);
+    });
+    
+    // Return to lobby from game end screen
+    connect(gameEndScreen, &GameEndScreen::returnToLobby, this, [this]() {
         stack->setCurrentWidget(lobbyScreen);
     });
 }

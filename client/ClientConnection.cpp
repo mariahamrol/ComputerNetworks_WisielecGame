@@ -227,6 +227,11 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 		case MSG_GAME_END:
 			if (onGameEnd) onGameEnd();
 			break;
+		case MSG_GAME_RESULTS: {
+			MsgGameResults results = *(MsgGameResults*)payload;
+			if (onGameResults) onGameResults(results);
+			break;
+		}
 		case MSG_PLAYER_ELIMINATED:
 			if (onPlayerEliminated) onPlayerEliminated();
 			break;

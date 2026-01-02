@@ -32,6 +32,7 @@ public:
 	std::function<void()> onWordGuessed;
 	std::function<void()> onServerShutdown;
 	std::function<void(const MsgGameState&)> onGameState;
+	std::function<void(const MsgGameResults&)> onGameResults;
     std::function<void()> onStartGameFail;
     std::function<void(const std::string&)> onError;
 	std::optional<MsgLobbyState> getLastLobbyState();

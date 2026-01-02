@@ -36,11 +36,13 @@ signals:
     void joinedGame(int gameId, std::vector<QString> players, QString owner, bool isHost);
     void gameStateUpdated(int gameId, QString hiddenWord, std::vector<QString> players, std::vector<int> lives, std::vector<int> points, QString guessedLetters, QString myGuessedLetters);
     void gameStarted( int gameId, QString hiddenWord, std::vector<QString> players, QString myNick);
+    void gameEnded(std::vector<QString> playerNames, std::vector<int> points, std::vector<bool> wasActive);
     void wrongLetterGuessed();
     void playerEliminated();
     void exitedGame();
     void exitedRoom();
     void roomClosed();
+    void startGameFailed();
     // Admin signals
     void adminPasswordRequired();
     void adminLoginOk();

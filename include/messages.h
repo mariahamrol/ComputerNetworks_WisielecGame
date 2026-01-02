@@ -122,6 +122,18 @@ typedef struct {
     NetPlayerState players[8];
 } MsgGameState;
 
+typedef struct {
+    char nick[MAX_NICK_LEN];
+    uint16_t points;
+    uint8_t was_active; // 0 if player left or was eliminated
+} GameResult;
+
+typedef struct {
+    uint32_t game_id;
+    uint8_t player_count;
+    GameResult players[8];
+} MsgGameResults;
+
 
 
 #endif

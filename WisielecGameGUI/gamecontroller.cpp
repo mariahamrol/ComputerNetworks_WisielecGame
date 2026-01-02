@@ -68,15 +68,54 @@ GameController::GameController(QObject *parent)
                 }
             }
             
-            if (gameJustStarted && msg.word_length > 0) {
+            // If word_length is 0, we're still in waiting room - update player list
+            if (msg.word_length == 0) {
+                qDebug() << "[GameController] Game state in waiting room - updating player list";
+                // Find owner (player with is_owner flag)
+                QString owner = "";
+                bool isHost = false;
+                for (uint8_t i = 0; i < msg.player_count && i < 8; ++i) {
+                    if (msg.players[i].is_owner) {
+                        owner = QString::fromStdString(msg.players[i].nick);
+                    }
+                    if (QString::fromStdString(msg.players[i].nick) == myNickname && msg.players[i].is_owner) {
+                        isHost = true;
+                    }
+                }
+                emit joinedGame(msg.game_id, qplayers, owner, isHost);
+            }
+            else if (gameJustStarted && msg.word_length > 0) {
                 emit gameStarted(msg.game_id, hiddenWord, qplayers, myNickname);
             }
-            emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);
+            
+            if (msg.word_length > 0) {
+                emit gameStateUpdated(msg.game_id, hiddenWord, qplayers, lives, points, guessedLetters, myGuessedLetters);
+            }
         };
 
         client->onPlayerEliminated = [this]() {
             qDebug() << "Player eliminated from game";
             emit playerEliminated();
+        };
+        
+        client->onStartGameFail = [this]() {
+            qDebug() << "Start game failed - not enough players";
+            emit startGameFailed();
+        };
+        
+        client->onGameResults = [this](const MsgGameResults& results) {
+            qDebug() << "Game results received";
+            std::vector<QString> playerNames;
+            std::vector<int> points;
+            std::vector<bool> wasActive;
+            
+            for (uint8_t i = 0; i < results.player_count; ++i) {
+                playerNames.push_back(QString::fromStdString(results.players[i].nick));
+                points.push_back(results.players[i].points);
+                wasActive.push_back(results.players[i].was_active != 0);
+            }
+            
+            emit gameEnded(playerNames, points, wasActive);
         };
         
         client->onGameEnd = [this]() {

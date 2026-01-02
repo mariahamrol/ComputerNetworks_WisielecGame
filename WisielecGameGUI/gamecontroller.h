@@ -49,5 +49,6 @@ signals:
 private:
     ClientConnection *client;
     QString myNickname;
+    bool waitingForGameStart = false;
 };
 #endif // GAMECONTROLLER_H

@@ -660,6 +660,8 @@ void delete_game(uint32_t game_id) {
 		}
 		games.erase(it);
 		printf("Gra id=%d zakończona i usunięta\n", game_id);
+		// Wyślij zaktualizowany stan lobby do wszystkich klientów
+		broadcast_lobby_state();
 	}
 	broadcast_lobby_state();
 }
@@ -728,6 +730,10 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 
 	if (game->player_count < 2 && game->active) {
 		delete_game(game->id);
+		// broadcast_lobby_state() jest już wywołane w delete_game()
+	} else {
+		// Jeśli gra nadal istnieje, ale gracz opuścił, też zaktualizuj lobby
+		broadcast_lobby_state();
 	}
 
 	for (const auto& [id, game] : games) {

@@ -101,5 +101,11 @@ void LobbyScreen::display_games(const std::vector<int> &gameIds)
     }
 
     gamesLayout->addStretch();
-    qDebug() << "[LobbyScreen] display_games completed";
+    
+    // Wymuszenie odświeżenia layoutu i widgetu
+    gamesWidget->updateGeometry();
+    gamesLayout->update();
+    scrollArea->viewport()->update();
+    
+    qDebug() << "[LobbyScreen] display_games completed, layout updated";
 }

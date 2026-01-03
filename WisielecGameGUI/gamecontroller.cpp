@@ -8,10 +8,11 @@
 GameController::GameController(QObject *parent)
     : QObject(parent) {
         client = new ClientConnection();
-		if(!client->connectToServer("127.0.0.1", 12345)) {
-			qDebug() << "[GameController] Error connecting to server";
-		} 
         
+        client->onServerShutdown = [this]() {
+            qDebug() << "[GameController] Server shutdown detected";
+            emit serverDisconnected();
+        };
         // Setup lobby state callback - będzie aktywny zawsze
         client->onLobbyState = [this](const MsgLobbyState& msg) {
             qDebug() << "[GameController] Received lobby state update, games count:" << msg.games_count;
@@ -317,4 +318,29 @@ void GameController::adminTerminateGameRequested(int gameId) {
         qDebug() << "Failed to terminate game";
     };
     client->adminTerminateGame((uint32_t)gameId);
+}
+
+void GameController::reconnectToServer()
+{
+    qDebug() << "[GameController] Attempting to reconnect to server...";
+    if(client->connectToServer("127.0.0.1", 12345)) {
+        emit connectionSuccessful();
+        qDebug() << "[GameController] Reconnected to server successfully";
+    } else {
+        emit connectionError();
+        qDebug() << "[GameController] Failed to reconnect to server";
+    }
+}
+
+void GameController::connectToServerInitial()
+{
+    qDebug() << "[GameController] Initial connection attempt...";
+    if(!client->connectToServer("127.0.0.1", 12345)) {
+        emit connectionError();
+        qDebug() << "[GameController] Error connecting to server";
+    } 
+    else {
+        emit connectionSuccessful();
+        qDebug() << "[GameController] Connected to server successfully";
+    }
 }

@@ -19,6 +19,8 @@ public slots:
     void guessLetterRequested(QChar letter);
     void exitGameRequested();
     void exitRoomRequested();
+    void reconnectToServer();
+    void connectToServerInitial();
     // Admin slots
     void adminLoginRequested(const QString &password);
     void adminListGamesRequested();
@@ -28,6 +30,9 @@ public slots:
     // bool give_mistakes = true;
 
 signals:
+    void connectionError(); 
+    void connectionSuccessful();
+    void serverDisconnected();
     void loginAccepted(const QString &login);
     void loginRejected(const QString &reason);
 

@@ -112,6 +112,7 @@ void ClientConnection::recvLoop() {
         MsgHeader hdr;
         int r = recv_msg(sock, hdr, buffer, sizeof(buffer));
         if (r <= 0) {
+            if (onServerShutdown) onServerShutdown();
             if (onError) onError("Disconnected from server");
             running = false;
             break;
@@ -245,6 +246,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 			if (onExitGameFail) onExitGameFail();
 			break;
 		case MSG_SERVER_SHUTDOWN:
+			if (onServerShutdown) onServerShutdown();
 			if (onError) onError("Server is shutting down");
 			running = false;
 			break;

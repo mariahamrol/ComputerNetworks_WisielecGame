@@ -14,8 +14,7 @@ LobbyScreen::LobbyScreen(QWidget *parent)
 {
     // -------- Load font --------
     int fontId = QFontDatabase::addApplicationFont(
-        "C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/"
-        "WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
+        "./assets/fonts/Orbitron-VariableFont_wght.ttf");
 
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
@@ -101,11 +100,5 @@ void LobbyScreen::display_games(const std::vector<int> &gameIds)
     }
 
     gamesLayout->addStretch();
-    
-    // Wymuszenie odświeżenia layoutu i widgetu
-    gamesWidget->updateGeometry();
-    gamesLayout->update();
-    scrollArea->viewport()->update();
-    
-    qDebug() << "[LobbyScreen] display_games completed, layout updated";
+    qDebug() << "[LobbyScreen] display_games completed";
 }

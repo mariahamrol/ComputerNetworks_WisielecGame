@@ -21,8 +21,6 @@ public:
 signals:
     void terminateRequested(int gameId);
     void viewRequested(int gameId);
-    void refreshGamesRequested();
-    void refreshUsersRequested();
 private:
     QTabWidget *tabWidget;
     

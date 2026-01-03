@@ -69,16 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
         controller, &GameController::adminTerminateGameRequested);
     connect(adminLobbyScreen, &AdminLobbyScreen::viewRequested,
         controller, &GameController::adminGameDetailsRequested);
-    connect(adminLobbyScreen, &AdminLobbyScreen::refreshGamesRequested,
-        controller, &GameController::adminListGamesRequested);
-    connect(adminLobbyScreen, &AdminLobbyScreen::refreshUsersRequested,
-        controller, &GameController::adminListUsersRequested);
     
-    // Refresh games list after terminating a game
-    connect(controller, &GameController::adminTerminateOk, this, [this]() {
-        controller->adminListGamesRequested();
-    });
-
     // WaitingRoom → Controller
     connect(lobbyScreen, &LobbyScreen::joinGame,
             controller, &GameController::joinGameRequested);

@@ -21,11 +21,7 @@ AdminLobbyScreen::AdminLobbyScreen(QWidget *parent) : QWidget(parent) {
     gamesHeader->setStyleSheet("font-size: 18px; font-weight: bold;");
     gamesMainLayout->addWidget(gamesHeader);
     
-    QPushButton *refreshGamesBtn = new QPushButton("Odśwież gry");
-    refreshGamesBtn->setStyleSheet("QPushButton {background-color: lightblue; padding: 5px;}");
-    connect(refreshGamesBtn, &QPushButton::clicked, this, &AdminLobbyScreen::refreshGamesRequested);
-    gamesMainLayout->addWidget(refreshGamesBtn);
-    
+
     gamesScrollArea = new QScrollArea();
     gamesScrollArea->setWidgetResizable(true);
     gamesContainer = new QWidget();
@@ -41,11 +37,7 @@ AdminLobbyScreen::AdminLobbyScreen(QWidget *parent) : QWidget(parent) {
     usersHeader->setStyleSheet("font-size: 18px; font-weight: bold;");
     usersMainLayout->addWidget(usersHeader);
     
-    QPushButton *refreshUsersBtn = new QPushButton("Odśwież użytkowników");
-    refreshUsersBtn->setStyleSheet("QPushButton {background-color: lightblue; padding: 5px;}");
-    connect(refreshUsersBtn, &QPushButton::clicked, this, &AdminLobbyScreen::refreshUsersRequested);
-    usersMainLayout->addWidget(refreshUsersBtn);
-    
+
     usersScrollArea = new QScrollArea();
     usersScrollArea->setWidgetResizable(true);
     usersContainer = new QWidget();

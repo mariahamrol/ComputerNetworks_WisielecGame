@@ -47,6 +47,8 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 void handle_client_data(std::shared_ptr<Client> client, int epoll_fd);
 void broadcast_lobby_state();
 void send_lobby_state(std::shared_ptr<Client> client);
+void broadcast_admin_games();
+void broadcast_admin_users();
 void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void create_game_word(Game& game);
@@ -471,6 +473,8 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	
 	brodcast_game_state(*game);
 	broadcast_lobby_state();
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 
@@ -547,6 +551,8 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 
 	broadcast_lobby_state();
 	brodcast_game_state(*game);
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
@@ -591,6 +597,7 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 	send_lobby_state(client);
 
 	printf("Klient zalogowany: %s (fd=%d)\n", client->nick, client->fd);
+	broadcast_admin_users();
 
 }
 
@@ -798,6 +805,8 @@ void delete_game(uint32_t game_id) {
 		printf("Gra id=%d zakończona i usunięta\n", game_id);
 		// Wyślij zaktualizowany stan lobby do wszystkich klientów
 		broadcast_lobby_state();
+		broadcast_admin_games();
+		broadcast_admin_users();
 	}
 	broadcast_lobby_state();
 }
@@ -905,10 +914,13 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 		games.erase(game->id);
 		printf("Gra id=%d zakończona z powodu braku graczy\n", game->id);
 		broadcast_lobby_state();
+		broadcast_admin_games();
+		broadcast_admin_users();
 	} else {
 		// Jeśli gra nadal istnieje, ale gracz opuścił, też zaktualizuj lobby
 		broadcast_lobby_state();
 		brodcast_game_state(*game);
+		broadcast_admin_users();
 	}
 }
 
@@ -932,6 +944,7 @@ void disconnect_client(int cfd, int epoll_fd) {
     clients.erase(cfd);
 
     printf("Klient usunięty (fd=%d)\n", cfd);
+    broadcast_admin_users();
 }
 
 void handle_create_room(std::shared_ptr<Client> client) {
@@ -1013,6 +1026,8 @@ void handle_create_room(std::shared_ptr<Client> client) {
 	}
 
 	broadcast_lobby_state();
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 void send_lobby_state(std::shared_ptr<Client> client) {
@@ -1040,6 +1055,24 @@ void broadcast_lobby_state() { // TODO tylko jak gracz jest w lobby
             send_lobby_state(other);
         }
     }
+}
+
+void broadcast_admin_games() {
+	// Send updated game list to all admins
+	for (auto& [fd, client] : clients) {
+		if (client->state == STATE_ADMIN) {
+			handle_admin_list_games(client);
+		}
+	}
+}
+
+void broadcast_admin_users() {
+	// Send updated user list to all admins
+	for (auto& [fd, client] : clients) {
+		if (client->state == STATE_ADMIN) {
+			handle_admin_list_users(client);
+		}
+	}
 }
 
 void brodcast_game_state(Game& game) {

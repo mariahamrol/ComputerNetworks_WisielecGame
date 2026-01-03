@@ -1,4 +1,17 @@
 build/
+.vscode
+dockerfile
+
+# CMake build
+server/build/
+server/CMakeFiles/
+server/cmake_install.cmake
+server/CMakeCache.txt
+server/Makefile
+
+# CMake build GUI
+WisielecGameGUI/build/
+
 .vscode/server/server.exe
-server.exe
+server.exe§
 a.out

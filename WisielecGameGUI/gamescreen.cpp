@@ -131,6 +131,9 @@ void GameScreen::setHiddenWord(const QString &word) {
 void GameScreen::setPlayers(const std::vector<QString> &players, const QString &myNick) {
     qDebug() << "Setting up players. Total:" << players.size() << "My nick:" << myNick;
     
+    // Reset isEliminated flag for new game
+    isEliminated = false;
+    
     // Ustaw swój nick
     myNickLabel->setText(myNick);
     
@@ -141,8 +144,12 @@ void GameScreen::setPlayers(const std::vector<QString> &players, const QString &
     for (auto label : otherNickLabels.values()) {
         delete label;
     }
+    for (auto label : otherPointsLabels.values()) {
+        delete label;
+    }
     otherHangmans.clear();
     otherNickLabels.clear();
+    otherPointsLabels.clear();
     
     // Utwórz wisielce dla innych graczy
     QFont nickFont;
@@ -173,6 +180,15 @@ void GameScreen::setPlayers(const std::vector<QString> &players, const QString &
         playerLayout->addWidget(nickLabel, 0, Qt::AlignCenter);
         otherNickLabels[playerNick] = nickLabel;
         
+        // Punkty pod nickiem
+        QFont pointsFont;
+        pointsFont.setPointSize(9);
+        QLabel *pointsLabel = new QLabel("0 pts", this);
+        pointsLabel->setAlignment(Qt::AlignCenter);
+        pointsLabel->setFont(pointsFont);
+        playerLayout->addWidget(pointsLabel, 0, Qt::AlignCenter);
+        otherPointsLabels[playerNick] = pointsLabel;
+        
         otherHangmansLayout->addLayout(playerLayout);
     }
     
@@ -184,8 +200,9 @@ void GameScreen::updateGameState(const QString &word, const std::vector<QString>
     bool isNewWord = (currentWord != word);
     if (isNewWord) {
         currentWord = word;
-        resetKeyboard();  // Nowe słowo = reset klawiatury
-        qDebug() << "New word detected - keyboard reset";
+        // NIE resetujemy isEliminated - wyeliminowany gracz pozostaje wyeliminowany do końca gry
+        resetKeyboard();  // Nowe słowo = reset klawiatury (dla aktywnych graczy)
+        qDebug() << "New word detected - keyboard reset for active players";
     }
     
     // Zaktualizuj wyświetlane słowo (od serwera)
@@ -207,9 +224,12 @@ void GameScreen::updateGameState(const QString &word, const std::vector<QString>
             myPointsLabel->setText(QString("%1 pts").arg(playerPoints));
             qDebug() << "Updated my hangman:" << mistakes << "mistakes," << playerPoints << "points";
         } else if (otherHangmans.contains(playerNick)) {
-            // Inny gracz - zaktualizuj jego wisielca
+            // Inny gracz - zaktualizuj jego wisielca i punkty
             otherHangmans[playerNick]->setMistakes(mistakes);
-            qDebug() << "Updated" << playerNick << "hangman:" << mistakes << "mistakes";
+            if (otherPointsLabels.contains(playerNick)) {
+                otherPointsLabels[playerNick]->setText(QString("%1 pts").arg(playerPoints));
+            }
+            qDebug() << "Updated" << playerNick << "hangman:" << mistakes << "mistakes," << playerPoints << "points";
         }
     }
     

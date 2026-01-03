@@ -44,6 +44,7 @@ private:
     QLabel *myPointsLabel;
     QMap<QString, Hangman*> otherHangmans;
     QMap<QString, QLabel*> otherNickLabels;
+    QMap<QString, QLabel*> otherPointsLabels;
     QHBoxLayout *otherHangmansLayout;
 };
 

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include "../client/ClientConnection.h"
 
 int main() {
@@ -104,11 +106,13 @@ int main() {
 		std::cout << msg << "\n";
 	};
 	client.onAdminGamesList = [](const MsgAdminGamesList& list) {
-		std::cout << "=== Aktywne gry (admin) ===\n";
+		std::cout << "\n=== Wszystkie gry (admin) ===\n";
 		uint32_t totalPlayers = 0;
 		for (uint32_t i = 0; i < list.games_count; ++i) {
 			std::cout << "Gra " << list.games[i].game_id
-					  << " (" << (int)list.games[i].players_count << " graczy)\n";
+					  << " | Graczy: " << (int)list.games[i].players_count
+					  << " | Status: " << (list.games[i].is_active ? "AKTYWNA" : "POKÓJ")
+					  << " | Owner: " << list.games[i].owner << "\n";
 			totalPlayers += list.games[i].players_count;
 		}
 		std::cout << "Razem gier: " << list.games_count << ", razem graczy: " << totalPlayers << "\n";
@@ -129,6 +133,58 @@ int main() {
 	client.onAdminLoginFail = [] {
 		std::cout << "Błędne hasło admina\n";
 	};
+	client.onAdminUsersList = [](const MsgAdminUsersList& list) {
+		std::cout << "\n=== Wszyscy użytkownicy (admin) ===\n";
+		const char* states[] = {"CONNECTED", "LOGGING_IN", "WAIT_ADMIN_PWD", "LOBBY", "IN_ROOM", "IN_GAME", "ADMIN"};
+		for (uint32_t i = 0; i < list.users_count; ++i) {
+			const auto& user = list.users[i];
+			std::cout << "Nick: " << user.nick
+					  << " | Stan: " << (user.state < 7 ? states[user.state] : "UNKNOWN")
+					  << " | Gra: " << (user.game_id == -1 ? "brak" : std::to_string(user.game_id));
+			
+			if (user.game_id != -1) {
+				std::cout << " | Życia: " << (int)user.lives
+						  << " | Punkty: " << user.points;
+			}
+			std::cout << "\n";
+		}
+		std::cout << "Razem użytkowników: " << list.users_count << "\n";
+	};
+	client.onAdminGameDetails = [](const MsgAdminGameDetails& details) {
+		std::cout << "\n=== Szczegóły gry ID: " << details.game_id << " (admin) ===\n";
+		std::cout << "Status: " << (details.is_active ? "AKTYWNA" : "POKÓJ") << "\n";
+		std::cout << "Owner: " << details.owner << "\n";
+		std::cout << "Graczy: " << (int)details.player_count << "\n";
+		if (details.is_active) {
+			std::cout << "\n*** SŁOWO (admin): " << details.word << " ***\n";
+			std::cout << "Stan odgadywania: ";
+			for (int i = 0; i < details.word_length; ++i) {
+				std::cout << (details.word_guessed[i] ? details.word_guessed[i] : '_') << " ";
+			}
+			std::cout << "\nOdgadnięte litery (wszyscy): ";
+			for (int i = 0; i < ALPHABET_SIZE && details.guessed_letters[i]; ++i) {
+				std::cout << details.guessed_letters[i] << " ";
+			}
+			std::cout << "\n";
+		}
+		std::cout << "\n--- Gracze ---\n";
+		for (int i = 0; i < details.player_count; ++i) {
+			const auto& p = details.players[i];
+			std::cout << (i + 1) << ". " << p.nick
+					  << " | Życia: " << (int)p.lives
+					  << " | Punkty: " << p.points
+					  << " | Aktywny: " << (p.is_active ? "TAK" : "NIE")
+					  << " | Owner: " << (p.is_owner ? "TAK" : "NIE");
+			if (details.is_active) {
+				std::cout << "\n   Odgadnięte przez tego gracza: ";
+				for (int j = 0; j < ALPHABET_SIZE && p.guessed_letters[j]; ++j) {
+					std::cout << p.guessed_letters[j] << " ";
+				}
+			}
+			std::cout << "\n";
+		}
+		std::cout << "==================\n";
+	};
 
     // --- start ---
     if (!client.connectToServer("127.0.0.1", 12345)) {
@@ -146,6 +202,8 @@ int main() {
 		std::cout << "Hasło admina: ";
 		std::cin >> pwd;
 		client.adminLogin(pwd);
+		// Czekaj na odpowiedź z serwera przed pokazaniem menu
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	}
 
 
@@ -154,9 +212,9 @@ int main() {
 	while (true) {
 		char c;
 		if (adminMode) {
-			std::cout << "a - lista gier, x - zakończ grę, q - wyjdź: ";
+			std::cout << "\n[ADMIN] a - lista gier | u - użytkownicy | i - info o grze | x - zakończ grę | q - wyjdź: ";
 		} else {
-			std::cout << "c - create game, q - quit, l - list games, j - join game, s - start game, g - guess letter, e - exit game, d - exit room: ";
+			std::cout << "\nc - create game | l - list games | j - join | s - start | g - guess | e - exit game | d - exit room | q - quit: ";
 		}
 		std::cin >> c;
 
@@ -168,6 +226,15 @@ int main() {
         }
 		else if (adminMode && c == 'a') {
 			client.adminListGames();
+		}
+		else if (adminMode && c == 'u') {
+			client.adminListUsers();
+		}
+		else if (adminMode && c == 'i') {
+			uint32_t gid;
+			std::cout << "ID gry do sprawdzenia: ";
+			std::cin >> gid;
+			client.adminGetGameDetails(gid);
 		}
 		else if (adminMode && c == 'x') {
 			uint32_t gid;

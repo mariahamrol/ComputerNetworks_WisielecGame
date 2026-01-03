@@ -5,7 +5,10 @@
 #include "adminlobbyscreen.h"
 #include "waitingroomscreen.h"
 #include "gamescreen.h"
+#include "gameendscreen.h"
 #include "gamecontroller.h"
+#include <QDebug>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     waitingScreen = new WaitingRoomScreen(stack);
     gameScreen = new GameScreen(stack);
+    gameEndScreen = new GameEndScreen(stack);
 
     controller = new GameController(this);
 
@@ -32,12 +36,13 @@ MainWindow::MainWindow(QWidget *parent)
     stack->addWidget(adminLobbyScreen);
     stack->addWidget(waitingScreen);
     stack->addWidget(gameScreen);
+    stack->addWidget(gameEndScreen);
 
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
 
-        connect(startScreen, &StartScreen::startClicked,
-            controller, &GameController::loginRequested);
+    connect(startScreen, &StartScreen::startClicked,
+        controller, &GameController::loginRequested);
     // Admin: prompt for password when server requests
     connect(controller, &GameController::adminPasswordRequired, this, [this]() {
         stack->setCurrentWidget(adminLoginScreen);
@@ -51,17 +56,20 @@ MainWindow::MainWindow(QWidget *parent)
     connect(controller, &GameController::adminLoginOk, this, [this]() {
         stack->setCurrentWidget(adminLobbyScreen);
         controller->adminListGamesRequested();
+        controller->adminListUsersRequested();
     });
     connect(controller, &GameController::adminGamesListUpdated,
         adminLobbyScreen, &AdminLobbyScreen::displayGames);
-    connect(adminLobbyScreen, &AdminLobbyScreen::refreshRequested,
-        controller, &GameController::adminListGamesRequested);
+    connect(controller, &GameController::adminUsersListUpdated,
+        adminLobbyScreen, &AdminLobbyScreen::displayUsers);
+    connect(controller, &GameController::adminGameDetailsUpdated,
+        adminLobbyScreen, &AdminLobbyScreen::displayGameDetails);
+    
     connect(adminLobbyScreen, &AdminLobbyScreen::terminateRequested,
         controller, &GameController::adminTerminateGameRequested);
-    // TODO: viewRequested could open a read-only game view; for now, refresh listing
     connect(adminLobbyScreen, &AdminLobbyScreen::viewRequested,
-        controller, &GameController::adminListGamesRequested);
-
+        controller, &GameController::adminGameDetailsRequested);
+    
     // WaitingRoom → Controller
     connect(lobbyScreen, &LobbyScreen::joinGame,
             controller, &GameController::joinGameRequested);
@@ -154,6 +162,36 @@ MainWindow::MainWindow(QWidget *parent)
     
     connect(controller, &GameController::roomClosed, this, [&]() {
         qDebug() << "[MainWindow] Room closed (host left), returning to lobby";
+        stack->setCurrentWidget(lobbyScreen);
+    });
+    
+    // Handle start game failure
+    connect(controller, &GameController::startGameFailed, this, [this]() {
+        QMessageBox::warning(this, "Cannot Start Game", 
+                           "Not enough players! You need at least 2 players to start the game.",
+                           QMessageBox::Ok);
+    });
+    
+    // Handle game ended with results
+    connect(controller, &GameController::gameEnded, this, 
+        [this](std::vector<QString> playerNames, std::vector<int> points, std::vector<bool> wasActive) {
+        qDebug() << "[MainWindow] Game ended, showing results";
+        
+        std::vector<PlayerResult> results;
+        for (size_t i = 0; i < playerNames.size(); ++i) {
+            PlayerResult result;
+            result.nick = playerNames[i];
+            result.points = points[i];
+            result.wasActive = wasActive[i];
+            results.push_back(result);
+        }
+        
+        gameEndScreen->displayResults(results);
+        stack->setCurrentWidget(gameEndScreen);
+    });
+    
+    // Return to lobby from game end screen
+    connect(gameEndScreen, &GameEndScreen::returnToLobby, this, [this]() {
         stack->setCurrentWidget(lobbyScreen);
     });
 }

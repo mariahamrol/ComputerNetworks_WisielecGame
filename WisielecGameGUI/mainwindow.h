@@ -11,6 +11,7 @@ class StartScreen;
 class LobbyScreen;
 class WaitingRoomScreen;
 class GameScreen;
+class GameEndScreen;
 
 class MainWindow : public QMainWindow
 {
@@ -25,6 +26,7 @@ private:
     WaitingRoomScreen *waitingScreen;
     GameController *controller;
     GameScreen *gameScreen;
+    GameEndScreen *gameEndScreen;
     AdminLoginScreen *adminLoginScreen; // Added member variable
     AdminLobbyScreen *adminLobbyScreen; // Added member variable
 };

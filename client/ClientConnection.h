@@ -32,12 +32,15 @@ public:
 	std::function<void()> onWordGuessed;
 	std::function<void()> onServerShutdown;
 	std::function<void(const MsgGameState&)> onGameState;
+	std::function<void(const MsgGameResults&)> onGameResults;
     std::function<void()> onStartGameFail;
     std::function<void(const std::string&)> onError;
 	std::optional<MsgLobbyState> getLastLobbyState();
 	std::optional<MsgGameState> getLastGameState();
     // Admin callbacks
     std::function<void(const MsgAdminGamesList&)> onAdminGamesList;
+    std::function<void(const MsgAdminUsersList&)> onAdminUsersList;
+    std::function<void(const MsgAdminGameDetails&)> onAdminGameDetails;
     std::function<void()> onAdminTerminateOk;
     std::function<void()> onAdminTerminateFail;
     std::function<void()> onAdminPasswordRequired;
@@ -61,6 +64,8 @@ public:
 	void exitRoom();
     // Admin API
     void adminListGames();
+    void adminListUsers();
+    void adminGetGameDetails(uint32_t gameId);
     void adminTerminateGame(uint32_t gameId);
 
 private:

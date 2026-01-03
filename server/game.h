@@ -2,8 +2,7 @@
 #define GAME_H
 
 #include <stdint.h>
-
-#define MAX_PLAYERS 8
+#include "../include/messages.h"
 
 typedef struct {
     int id;

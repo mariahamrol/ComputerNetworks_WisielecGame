@@ -38,6 +38,8 @@ std::unordered_map<uint32_t, Game> games;
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
 void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg);
 void handle_admin_list_games(std::shared_ptr<Client> client);
+void handle_admin_list_users(std::shared_ptr<Client> client);
+void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg);
 void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg);
 void handle_create_room(std::shared_ptr<Client> client);
 void disconnect_client(int cfd, int epoll_fd);
@@ -45,12 +47,15 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 void handle_client_data(std::shared_ptr<Client> client, int epoll_fd);
 void broadcast_lobby_state();
 void send_lobby_state(std::shared_ptr<Client> client);
+void broadcast_admin_games();
+void broadcast_admin_users();
 void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void create_game_word(Game& game);
 void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg);
 void brodcast_game_state(Game& game);
 void delete_player_from_game(std::shared_ptr<Client> client);
+void send_game_results(Game& game);
 void delete_game(uint32_t game_id);
 void start_new_turn(Game& game);
 void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload = nullptr, uint16_t length = 0);
@@ -234,6 +239,12 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
             break;
 		case MSG_ADMIN_LIST_GAMES_REQ:
 			handle_admin_list_games(client);
+			break;
+		case MSG_ADMIN_LIST_USERS_REQ:
+			handle_admin_list_users(client);
+			break;
+		case MSG_ADMIN_GAME_DETAILS_REQ:
+			handle_admin_game_details(client, (MsgGameIdReq*)payload);
 			break;
 		case MSG_ADMIN_LOGIN_REQ:
 			handle_admin_login(client, (MsgAdminLoginReq*)payload);
@@ -462,6 +473,8 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	
 	brodcast_game_state(*game);
 	broadcast_lobby_state();
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 
@@ -538,6 +551,8 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 
 	broadcast_lobby_state();
 	brodcast_game_state(*game);
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
@@ -582,6 +597,7 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 	send_lobby_state(client);
 
 	printf("Klient zalogowany: %s (fd=%d)\n", client->nick, client->fd);
+	broadcast_admin_users();
 
 }
 
@@ -611,13 +627,102 @@ void handle_admin_list_games(std::shared_ptr<Client> client) {
 	MsgAdminGamesList list{};
 	list.games_count = 0;
 	for (const auto& [id, game] : games) {
-		if (!game.active) continue; // tylko trwające gry
 		if (list.games_count >= MAX_GAMES) break;
 		list.games[list.games_count].game_id = game.id;
 		list.games[list.games_count].players_count = (uint8_t)game.player_count;
+		list.games[list.games_count].is_active = game.active ? 1 : 0;
+		strncpy(list.games[list.games_count].owner, game.owner, MAX_NICK_LEN - 1);
+		list.games[list.games_count].owner[MAX_NICK_LEN - 1] = '\0';
 		list.games_count++;
 	}
 	send_msg(client->fd, MSG_ADMIN_GAMES_LIST, &list, sizeof(list));
+	printf("Admin (fd=%d) pobrał listę %d gier\n", client->fd, list.games_count);
+}
+
+void handle_admin_list_users(std::shared_ptr<Client> client) {
+	if (client->state != STATE_ADMIN) {
+		printf("Nieautoryzowana próba pobrania listy użytkowników (fd=%d)\n", client->fd);
+		return;
+	}
+	
+	MsgAdminUsersList list{};
+	list.users_count = 0;
+	
+	for (const auto& [fd, c] : clients) {
+		if (list.users_count >= 64) break;
+		
+		AdminUserInfo& user = list.users[list.users_count];
+		strncpy(user.nick, c->nick, MAX_NICK_LEN - 1);
+		user.nick[MAX_NICK_LEN - 1] = '\0';
+		user.state = (uint8_t)c->state;
+		user.game_id = c->game_id;
+		
+		// Only show lives and points for users who are actually in games (players)
+		if (c->game_id != -1 && (c->state == STATE_IN_ROOM || c->state == STATE_IN_GAME)) {
+			user.lives = c->lives;
+			user.points = c->points;
+		} else {
+			user.lives = 0;
+			user.points = 0;
+		}
+		
+		list.users_count++;
+	}
+	
+	send_msg(client->fd, MSG_ADMIN_USERS_LIST, &list, sizeof(list));
+	printf("Admin (fd=%d) pobrał listę %d użytkowników\n", client->fd, list.users_count);
+}
+
+void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
+	if (client->state != STATE_ADMIN) {
+		printf("Nieautoryzowana próba pobrania szczegółów gry (fd=%d)\n", client->fd);
+		return;
+	}
+	
+	Game* game = find_game_by_id(msg->game_id);
+	if (game == nullptr) {
+		printf("Admin (fd=%d) próbował pobrać szczegóły nieistniejącej gry id=%d\n", client->fd, msg->game_id);
+		send_msg(client->fd, MSG_ERROR, nullptr, 0);
+		return;
+	}
+	
+	MsgAdminGameDetails details{};
+	details.game_id = game->id;
+	details.is_active = game->active ? 1 : 0;
+	details.player_count = (uint8_t)game->player_count;
+	
+	strncpy(details.owner, game->owner, MAX_NICK_LEN - 1);
+	details.owner[MAX_NICK_LEN - 1] = '\0';
+	
+	strncpy(details.word, game->word, MAX_WORD_LEN - 1);
+	details.word[MAX_WORD_LEN - 1] = '\0';
+	
+	strncpy(details.word_guessed, game->word_guessed, MAX_WORD_LEN - 1);
+	details.word_guessed[MAX_WORD_LEN - 1] = '\0';
+	
+	memcpy(details.guessed_letters, game->guessed_letters, ALPHABET_SIZE);
+	details.word_length = game->word_length;
+	
+	// Fill player details
+	for (int i = 0; i < game->player_count && i < MAX_PLAYERS; ++i) {
+		int pfd = game->players[i];
+		auto it = clients.find(pfd);
+		if (it != clients.end()) {
+			auto& c = it->second;
+			AdminPlayerInfo& player = details.players[i];
+			
+			strncpy(player.nick, c->nick, MAX_NICK_LEN - 1);
+			player.nick[MAX_NICK_LEN - 1] = '\0';
+			player.lives = c->lives;
+			player.points = c->points;
+			player.is_active = c->is_active ? 1 : 0;
+			player.is_owner = c->is_owner ? 1 : 0;
+			memcpy(player.guessed_letters, c->guessed_letters, ALPHABET_SIZE);
+		}
+	}
+	
+	send_msg(client->fd, MSG_ADMIN_GAME_DETAILS, &details, sizeof(details));
+	printf("Admin (fd=%d) pobrał szczegóły gry id=%d\n", client->fd, game->id);
 }
 
 void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
@@ -638,12 +743,52 @@ void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* m
 	handle_admin_list_games(client);
 }
 
+void send_game_results(Game& game) {
+	// Prepare game results message
+	MsgGameResults results{};
+	results.game_id = game.id;
+	results.player_count = 0;
+	
+	// Collect all players and their final scores
+	for(int i = 0; i < game.player_count; ++i) {
+		int pfd = game.players[i];
+		auto cit = clients.find(pfd);
+		if (cit != clients.end()) {
+			auto client = cit->second;
+			GameResult& result = results.players[results.player_count];
+			strncpy(result.nick, client->nick, MAX_NICK_LEN - 1);
+			result.nick[MAX_NICK_LEN - 1] = '\0';
+			result.points = client->points;
+			result.was_active = client->is_active && client->lives > 0 ? 1 : 0;
+			results.player_count++;
+		}
+	}
+	
+	// Send results to all players in the game
+	for(int i = 0; i < game.player_count; ++i) {
+		int pfd = game.players[i];
+		if (clients.find(pfd) != clients.end()) {
+			printf("  -> Wysyłanie wyników do gracza fd=%d\\n", pfd);
+			if (send_msg(pfd, MSG_GAME_RESULTS, &results, sizeof(results)) != 0) {
+				perror("send_msg GAME_RESULTS");
+			}
+		}
+	}
+	printf("Wysłano wyniki gry id=%d do %d graczy\n", game.id, results.player_count);
+}
+
 void delete_game(uint32_t game_id) {
 	auto it = games.find(game_id);
 	if (it != games.end()) {
-		it->second.active = 0;
-		for(int i = 0; i < it->second.player_count; ++i) {
-			int pfd = it->second.players[i];
+		Game& game = it->second;
+		
+		// Send results BEFORE cleaning up
+		send_game_results(game);
+		
+		// Clean up player states (DON'T send MSG_GAME_END - results are enough)
+		game.active = 0;
+		for(int i = 0; i < game.player_count; ++i) {
+			int pfd = game.players[i];
 			auto cit = clients.find(pfd);
 			if (cit != clients.end()) {
 				auto client = cit->second;
@@ -653,15 +798,15 @@ void delete_game(uint32_t game_id) {
 				client->lives = 0;
 				client->points = 0;
 				memset(client->guessed_letters, 0, ALPHABET_SIZE);
-				if (send_msg(pfd, MSG_GAME_END, nullptr, 0) != 0) {
-					perror("send_msg GAME_ENDED");
-				}
+				// MSG_GAME_END not sent here - MSG_GAME_RESULTS is the final message
 			}
 		}
 		games.erase(it);
 		printf("Gra id=%d zakończona i usunięta\n", game_id);
 		// Wyślij zaktualizowany stan lobby do wszystkich klientów
 		broadcast_lobby_state();
+		broadcast_admin_games();
+		broadcast_admin_users();
 	}
 	broadcast_lobby_state();
 }
@@ -691,11 +836,19 @@ void user_exit_game(std::shared_ptr<Client> client) {
 		return;
 	}
 
+	// Save game_id BEFORE delete_player_from_game (which sets it to -1)
+	uint32_t saved_game_id = client->game_id;
+	
 	delete_player_from_game(client);
-
-	if (send_msg(client->fd, MSG_EXIT_GAME_OK, nullptr, 0) != 0) {
-		printf("błąd przy wysyłaniu EXIT_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
-		perror("send_msg EXIT_GAME_OK");
+	
+	// MSG_GAME_RESULTS and MSG_GAME_END are sent inside delete_player_from_game if needed
+	// Send EXIT_GAME_OK only if game didn't end (still exists)
+	Game* game = find_game_by_id(saved_game_id);
+	if (game != nullptr) {
+		if (send_msg(client->fd, MSG_EXIT_GAME_OK, nullptr, 0) != 0) {
+			printf("błąd przy wysyłaniu EXIT_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
+			perror("send_msg EXIT_GAME_OK");
+		}
 	}
 }
 
@@ -712,15 +865,28 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 	// delete GAME with is active (so the game is in progress ) will not occur in this case 
 	if (client->is_owner && !game->active) { 
 		delete_game(game->id);
-	} else {
-		auto& players = game->players;
-		auto it = std::find(players, players + game->player_count, client->fd);
-		if (it != players + game->player_count) {
-			std::rotate(it, it + 1, players + game->player_count);
-			game->player_count--;
-		}
-
+		return; // Game deleted, client cleanup done in delete_game
 	}
+	
+	// Check if game will end after removing this player
+	bool will_end_game = (game->player_count <= 2 && game->active);
+
+	// IMPORTANT: Send results BEFORE removing player so they're included in the results!
+	if (will_end_game) {
+		printf("Gra id=%d kończy się - wysyłanie wyników do %d graczy (włącznie z wychodzącym)\n", game->id, game->player_count);
+		send_game_results(*game);
+	}
+	
+	// Remove player from game
+	auto& players = game->players;
+	auto it = std::find(players, players + game->player_count, client->fd);
+	if (it != players + game->player_count) {
+		std::rotate(it, it + 1, players + game->player_count);
+		game->player_count--;
+	}
+
+	// Clean up client state
+	int exiting_fd = client->fd;
 	client->game_id = -1;
 	client->state = STATE_LOBBY;
 	client->is_owner = 0;
@@ -728,21 +894,34 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 	client->points = 0;
 	memset(client->guessed_letters, 0, ALPHABET_SIZE);
 
-	if (game->player_count < 2 && game->active) {
-		delete_game(game->id);
-		// broadcast_lobby_state() jest już wywołane w delete_game()
+	// Now end the game if needed (MSG_GAME_RESULTS already sent)
+	if (will_end_game) {
+		// Clean up remaining players (DON'T send MSG_GAME_END - results already sent)
+		for(int i = 0; i < game->player_count; ++i) {
+			int pfd = game->players[i];
+			auto cit = clients.find(pfd);
+			if (cit != clients.end()) {
+				auto c = cit->second;
+				c->game_id = -1;
+				c->state = STATE_LOBBY;
+				c->is_owner = 0;
+				c->lives = 0;
+				c->points = 0;
+				memset(c->guessed_letters, 0, ALPHABET_SIZE);
+				// MSG_GAME_END not sent - MSG_GAME_RESULTS is the final message
+			}
+		}
+		games.erase(game->id);
+		printf("Gra id=%d zakończona z powodu braku graczy\n", game->id);
+		broadcast_lobby_state();
+		broadcast_admin_games();
+		broadcast_admin_users();
 	} else {
 		// Jeśli gra nadal istnieje, ale gracz opuścił, też zaktualizuj lobby
 		broadcast_lobby_state();
+		brodcast_game_state(*game);
+		broadcast_admin_users();
 	}
-
-	for (const auto& [id, game] : games) {
-		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
-	}
-
-	brodcast_game_state(*game);
-	broadcast_lobby_state();
-
 }
 
 void disconnect_client(int cfd, int epoll_fd) {
@@ -765,6 +944,7 @@ void disconnect_client(int cfd, int epoll_fd) {
     clients.erase(cfd);
 
     printf("Klient usunięty (fd=%d)\n", cfd);
+    broadcast_admin_users();
 }
 
 void handle_create_room(std::shared_ptr<Client> client) {
@@ -846,6 +1026,8 @@ void handle_create_room(std::shared_ptr<Client> client) {
 	}
 
 	broadcast_lobby_state();
+	broadcast_admin_games();
+	broadcast_admin_users();
 }
 
 void send_lobby_state(std::shared_ptr<Client> client) {
@@ -873,6 +1055,24 @@ void broadcast_lobby_state() { // TODO tylko jak gracz jest w lobby
             send_lobby_state(other);
         }
     }
+}
+
+void broadcast_admin_games() {
+	// Send updated game list to all admins
+	for (auto& [fd, client] : clients) {
+		if (client->state == STATE_ADMIN) {
+			handle_admin_list_games(client);
+		}
+	}
+}
+
+void broadcast_admin_users() {
+	// Send updated user list to all admins
+	for (auto& [fd, client] : clients) {
+		if (client->state == STATE_ADMIN) {
+			handle_admin_list_users(client);
+		}
+	}
 }
 
 void brodcast_game_state(Game& game) {

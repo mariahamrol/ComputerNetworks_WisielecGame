@@ -8,6 +8,7 @@
 #define MAX_WORD_LEN 64
 #define MAX_GAMES 32
 #define MAX_LIVES 10
+#define MAX_PLAYERS 8
 #define ALPHABET_SIZE 32
 
 
@@ -57,12 +58,48 @@ typedef struct {
 typedef struct {
     uint32_t game_id;
     uint8_t players_count;
+    uint8_t is_active;
+    char owner[MAX_NICK_LEN];
 } AdminGameInfo;
 
 typedef struct {
     uint32_t games_count;
     AdminGameInfo games[MAX_GAMES];
 } MsgAdminGamesList;
+
+typedef struct {
+    char nick[MAX_NICK_LEN];
+    uint8_t state;
+    int32_t game_id;
+    uint8_t lives;
+    uint16_t points;
+} AdminUserInfo;
+
+typedef struct {
+    uint32_t users_count;
+    AdminUserInfo users[64];
+} MsgAdminUsersList;
+
+typedef struct {
+    char nick[MAX_NICK_LEN];
+    uint8_t lives;
+    uint16_t points;
+    uint8_t is_active;
+    uint8_t is_owner;
+    char guessed_letters[ALPHABET_SIZE];
+} AdminPlayerInfo;
+
+typedef struct {
+    uint32_t game_id;
+    uint8_t is_active;
+    uint8_t player_count;
+    char owner[MAX_NICK_LEN];
+    char word[MAX_WORD_LEN];
+    char word_guessed[MAX_WORD_LEN];
+    char guessed_letters[ALPHABET_SIZE];
+    uint8_t word_length;
+    AdminPlayerInfo players[MAX_PLAYERS];
+} MsgAdminGameDetails;
 
 /* ===== GAME STATE ===== */
 
@@ -84,6 +121,18 @@ typedef struct {
 	uint8_t player_count;
     NetPlayerState players[8];
 } MsgGameState;
+
+typedef struct {
+    char nick[MAX_NICK_LEN];
+    uint16_t points;
+    uint8_t was_active; // 0 if player left or was eliminated
+} GameResult;
+
+typedef struct {
+    uint32_t game_id;
+    uint8_t player_count;
+    GameResult players[8];
+} MsgGameResults;
 
 
 

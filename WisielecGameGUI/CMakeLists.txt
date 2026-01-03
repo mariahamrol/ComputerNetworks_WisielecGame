@@ -66,6 +66,7 @@ qt_add_executable(WisielecGameGUI
     startscreen.cpp
     waitingroomscreen.cpp
     gamescreen.cpp
+    gameendscreen.cpp
     lobbyscreen.cpp
     gamecontroller.cpp
     hangman.cpp

@@ -887,7 +887,6 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 	}
 
 	// Clean up client state
-	int exiting_fd = client->fd;
 	client->game_id = -1;
 	client->state = STATE_LOBBY;
 	client->is_owner = 0;
@@ -1116,11 +1115,11 @@ void brodcast_game_state(Game& game) {
             req.game_id = game.id;
 
             handle_admin_game_details(client, &req);
-            break; 
+            break;
         }
     }
 }
-void handle_shutdown(int sig) {
+void handle_shutdown([[maybe_unused]] int sig) {
     server_running = 0;
 }
 

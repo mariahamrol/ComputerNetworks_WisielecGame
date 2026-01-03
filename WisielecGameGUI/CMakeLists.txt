@@ -76,6 +76,12 @@ qt_add_executable(WisielecGameGUI
     ../include/net.cpp
 )
 
+target_compile_options(WisielecGameGUI
+    PRIVATE
+        -Wall
+        -Wextra
+)
+
 target_include_directories(WisielecGameGUI
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -388,7 +388,7 @@ void start_new_turn(Game& game) {
 	for (int i = 0; i < game.word_length; ++i) {
 		game.word_guessed[i] = '_'; // Reset odgadniętych liter
 	}
-	// Reset stanu graczy
+	// Reset stanu graczy - tylko zgadnięte litery, życia i aktywność pozostają
 	for (int i = 0; i < game.player_count; ++i) {
 		int pfd = game.players[i];
 		auto it = clients.find(pfd);
@@ -516,6 +516,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	game->player_count++;
 	client->game_id = game->id;
 	client->is_owner = 0;
+	client->is_active = 1;
 	client->lives = MAX_LIVES;
 	client->points = 0;
 	memset(client->guessed_letters, 0, ALPHABET_SIZE);

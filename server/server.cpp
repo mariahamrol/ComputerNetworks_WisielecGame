@@ -33,6 +33,7 @@ volatile sig_atomic_t server_running = 1;
 // --- Global Server State ---
 std::map<int, std::shared_ptr<Client>> clients;
 std::unordered_map<uint32_t, Game> games;
+std::unordered_map<char, PendingGuess> pending_guesses;
 
 // --- Forward Declarations ---
 void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
@@ -53,7 +54,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
 void create_game_word(Game& game);
 void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg);
-void brodcast_game_state(Game& game);
+void broadcast_game_state(Game& game);
 void delete_player_from_game(std::shared_ptr<Client> client);
 void send_game_results(Game& game);
 void delete_game(uint32_t game_id);
@@ -63,6 +64,7 @@ void user_exit_game(std::shared_ptr<Client> client);
 void user_exit_room(std::shared_ptr<Client> client);
 void handle_shutdown(int sig);
 void graceful_shutdown();
+void resolve_pending_guesses();
 Game* find_game_by_id(uint32_t game_id);
 
 static void set_non_blocking(int fd) {
@@ -122,7 +124,10 @@ int main() {
     epoll_event events[MAX_EVENTS];
 
     while (server_running) {
-        int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, 50);
+
+		resolve_pending_guesses();
+
         if (n_events < 0) {
             perror("epoll_wait");
             continue;
@@ -294,92 +299,129 @@ void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg
 	}
 	const char letter = msg->letter; 
 	printf("Gracz %s próbuje odgadnąć literę '%c' w grze id=%d\n", client->nick, letter, client->game_id);
-	bool already_guessed = false;
-	for (int i = 0; i < ALPHABET_SIZE; i++) {
-		if (client->guessed_letters[i] == letter || game->guessed_letters[i] == letter) {
-			already_guessed = true;
-			break;
-		}
-	}
-	if (already_guessed) {
-		printf("Litera %c już odgadnięta przez %s w grze id=%d\n", letter, client->nick, client->game_id);
-		if(send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0) != 0) {
-			perror("send_msg GUESS_LETTER_FAIL");
-		}
-		return;
-	}
 
-	uint8_t correct = 0;
-	uint8_t count = 0;
-	for (int i = 0; i < game->word_length; ++i) {
-		if (game->word[i] == letter) {
-			game->word_guessed[i] = letter;
-			count++;
-			correct = 1;
-		}
-	}
-
-	if (correct == 0) {
-		client->lives--;
-		if (client->lives == 0) {
-			client->is_active = 0;
-			if (send_msg(client->fd, MSG_PLAYER_ELIMINATED, nullptr, 0) != 0) {
-				perror("send_msg PLAYER_ELIMINATED");
-			}
-			printf("Gracz %s stracił wszystkie życia i jest nieaktywny w grze id=%d\n", client->nick, client->game_id);
-		}
-	}
-
-	if (count > 0) {
-		client->points += count * 10;
-	}
-
-	for (int i = 0; i < ALPHABET_SIZE; i++) {
-        if (game->guessed_letters[i] == 0 && correct) {
-            game->guessed_letters[i] = letter;
-            break;
+	// sprawdzenie czy litera była już zgadywana przez tego gracza
+	for (int i = 0; i < ALPHABET_SIZE; ++i) {
+        if (client->guessed_letters[i] == letter) {
+            send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0);
+            return;
         }
     }
 
-	for (int i = 0; i < ALPHABET_SIZE; i++) {
+    // zapisanie że gracz ją zgadywał
+    for (int i = 0; i < ALPHABET_SIZE; ++i) {
         if (client->guessed_letters[i] == 0) {
             client->guessed_letters[i] = letter;
             break;
         }
     }
 
+    auto& pending = game->pending[letter];
+
+    // pierwsze zgłoszenie tej litery - start timera
+    if (pending.players.empty()) {
+        pending.letter = letter;
+        pending.reveal_at = std::chrono::steady_clock::now()
+                          + std::chrono::milliseconds(200);
+    }
+
+    pending.players.push_back(client->fd);
+
 	if (send_msg(client->fd, MSG_GUESS_LETTER_OK, nullptr, 0) != 0) {
 		perror("send_msg GUESS_LETTER_OK");
     }
-
-	brodcast_game_state(*game);
-
-	// sprawdz czy jest przynajmniej 2 aktywnych graczy
-	int active_players = 0;
-	for (int i = 0; i < game->player_count; ++i) {
-		int pfd = game->players[i];
-		auto it = clients.find(pfd);
-		if (it == clients.end())
-			continue;// Already disconnected
-		auto c = it->second;
-		if (c->is_active && c->lives > 0) {
-			active_players++;
-		}
-	}
-	if (active_players < 2) {
-		printf("Gra id=%d zakończona! Za mało aktywnych graczy (%d)\n", game->id, active_players);
-		delete_game(game->id);
-		return;
-	}
-
-	// Sprawdź, czy słowo zostało odgadnięte 
-	if(std::strcmp(game->word, game->word_guessed) == 0) {
-		printf("tura gry id=%d zakończona! Słowo odgadnięte: %s\n", game->id, game->word);
-		broadcast_to_game(*game, MSG_WORD_GUESSED);
-		start_new_turn(*game);
-		return;
-	}
 }
+
+void resolve_pending_guesses() {
+    auto now = std::chrono::steady_clock::now();
+
+    for (auto& [gid, game] : games) {
+        if (!game.active) continue;
+
+        std::vector<char> to_resolve;
+
+        for (auto& [letter, pending] : game.pending) {
+            if (now >= pending.reveal_at) {
+                to_resolve.push_back(letter);
+            }
+        }
+
+        for (char letter : to_resolve) {
+			printf("Resolving letter '%c' for game id=%d\n", letter, game.id);
+            auto pending = game.pending[letter];
+
+            int count = 0;
+            for (int i = 0; i < game.word_length; ++i) {
+                if (game.word[i] == letter) {
+                    game.word_guessed[i] = letter;
+                    count++;
+                }
+            }
+
+            if (count == 0) {
+                // kara tylko raz – dla wszystkich
+                for (int fd : pending.players) {
+                    auto it = clients.find(fd);
+                    if (it != clients.end()) {
+                        it->second->lives--;
+                        if (it->second->lives <= 0) {
+                            it->second->is_active = 0;
+                            send_msg(fd, MSG_PLAYER_ELIMINATED, nullptr, 0);
+                        }
+                    }
+                }
+            } else {
+                for (int fd : pending.players) {
+                    auto it = clients.find(fd);
+                    if (it != clients.end()) {
+                        it->second->points += count * 10;
+                    }
+                }
+
+                // oznacz literę jako globalnie ujawnioną
+                for (int i = 0; i < ALPHABET_SIZE; ++i) {
+                    if (game.guessed_letters[i] == 0) {
+                        game.guessed_letters[i] = letter;
+                        break;
+                    }
+                }
+
+            }
+
+			int active_players = 0;
+			for (int i = 0; i < game.player_count; ++i) {
+				int pfd = game.players[i];
+				auto it = clients.find(pfd);
+				if (it == clients.end())
+					continue;// Already disconnected
+				auto c = it->second;
+				if (c->is_active && c->lives > 0) {
+					active_players++;
+				}
+			}
+
+			if (active_players < 2) {
+				printf("Gra id=%d zakończona! Za mało aktywnych graczy (%d)\n", game.id, active_players);
+				delete_game(game.id);
+				return;
+			}
+
+			game.pending.erase(letter);
+
+			// sprawenie, czy słowo zostało odgadnięte 
+			if(std::strcmp(game.word, game.word_guessed) == 0) {
+				printf("tura gry id=%d zakończona! Słowo odgadnięte: %s\n", game.id, game.word);
+				broadcast_to_game(game, MSG_WORD_GUESSED);
+				start_new_turn(game);
+				return;
+			}
+			
+			broadcast_game_state(game);
+
+        }
+    }
+}
+
 
 void start_new_turn(Game& game) {
 	create_game_word(game); // Nowe słowo
@@ -388,6 +430,7 @@ void start_new_turn(Game& game) {
 	for (int i = 0; i < game.word_length; ++i) {
 		game.word_guessed[i] = '_'; // Reset odgadniętych liter
 	}
+	game.pending.clear(); // Reset oczekujących zgadnięć
 	// Reset stanu graczy - tylko zgadnięte litery, życia i aktywność pozostają
 	for (int i = 0; i < game.player_count; ++i) {
 		int pfd = game.players[i];
@@ -398,7 +441,7 @@ void start_new_turn(Game& game) {
 		memset(client->guessed_letters, 0, ALPHABET_SIZE);
 	}
 	printf("Nowa tura gry id=%d rozpoczęta! Nowe słowo: %s\n", game.id, game.word);
-	brodcast_game_state(game);
+	broadcast_game_state(game);
 }
 
 void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload, uint16_t length) {
@@ -471,7 +514,7 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 		}
 	}
 	
-	brodcast_game_state(*game);
+	broadcast_game_state(*game);
 	broadcast_lobby_state();
 	broadcast_admin_games();
 	broadcast_admin_users();
@@ -551,7 +594,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	}
 
 	broadcast_lobby_state();
-	brodcast_game_state(*game);
+	broadcast_game_state(*game);
 	broadcast_admin_games();
 	broadcast_admin_users();
 }
@@ -919,7 +962,7 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 	} else {
 		// Jeśli gra nadal istnieje, ale gracz opuścił, też zaktualizuj lobby
 		broadcast_lobby_state();
-		brodcast_game_state(*game);
+		broadcast_game_state(*game);
 		broadcast_admin_users();
 	}
 }
@@ -956,8 +999,7 @@ void handle_create_room(std::shared_ptr<Client> client) {
         return;
     }
 
-    Game game;
-    memset(&game, 0, sizeof(Game));
+	Game game {};
 
     // ID gry
 	game.id = next_game_id++;
@@ -1075,7 +1117,7 @@ void broadcast_admin_users() {
 	}
 }
 
-void brodcast_game_state(Game& game) {
+void broadcast_game_state(Game& game) {
     MsgGameState game_state;
     memset(&game_state, 0, sizeof(MsgGameState));
     

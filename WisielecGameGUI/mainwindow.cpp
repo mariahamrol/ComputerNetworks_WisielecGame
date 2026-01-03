@@ -115,8 +115,8 @@ MainWindow::MainWindow(QWidget *parent)
             {
                 qDebug() << "[MainWindow] gameStarted signal received!";
                 qDebug() << "[MainWindow] Switching to GameScreen...";
-                gameScreen->setHiddenWord(hiddenWord);
-                gameScreen->setPlayers(players, myNick);
+                gameScreen->setPlayers(players, myNick);  // Reset isEliminated first
+                gameScreen->setHiddenWord(hiddenWord);    // Then set word and reset keyboard
 
                 stack->setCurrentWidget(gameScreen);
                 qDebug() << "[MainWindow] Current widget set to GameScreen";

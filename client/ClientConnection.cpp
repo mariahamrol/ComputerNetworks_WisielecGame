@@ -23,6 +23,8 @@ std::optional<MsgGameState> ClientConnection::getLastGameState() {
 
 
 bool ClientConnection::connectToServer(const std::string& ip, int port) {
+	disconnect();
+
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) return false;
 

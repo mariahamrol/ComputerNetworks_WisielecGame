@@ -733,8 +733,8 @@ void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* m
 		return;
 	}
 	Game* game = find_game_by_id(msg->game_id);
-	if (game == nullptr || !game->active) {
-		printf("Nie można zakończyć gry id=%d – nie istnieje lub nieaktywna\n", msg->game_id);
+	if (game == nullptr) {
+		printf("Nie można zakończyć gry id=%d – nie istnieje\n", msg->game_id);
 		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
 		return;
 	}
@@ -1107,6 +1107,18 @@ void brodcast_game_state(Game& game) {
     }
 
 	broadcast_to_game(game, MSG_GAME_STATE, &game_state, sizeof(game_state));
+	
+	for (auto& [fd, client] : clients) {
+        if (client->state == STATE_ADMIN &&
+            strcmp(client->nick, "admin") == 0) {
+
+            MsgGameIdReq req{};
+            req.game_id = game.id;
+
+            handle_admin_game_details(client, &req);
+            break; 
+        }
+    }
 }
 void handle_shutdown(int sig) {
     server_running = 0;

@@ -8,7 +8,9 @@
 GameController::GameController(QObject *parent)
     : QObject(parent) {
         client = new ClientConnection();
-        client->connectToServer("127.0.0.1", 12345);
+		if(!client->connectToServer("127.0.0.1", 12345)) {
+			qDebug() << "[GameController] Error connecting to server";
+		} 
         
         // Setup lobby state callback - będzie aktywny zawsze
         client->onLobbyState = [this](const MsgLobbyState& msg) {

@@ -41,8 +41,29 @@ MainWindow::MainWindow(QWidget *parent)
     stack->setCurrentIndex(0);
     setCentralWidget(stack);
 
+    connect(controller, &GameController::connectionSuccessful, this, [this]() {
+        startScreen->isConnected = true;
+        startScreen->hideConnectionError();
+    });
+    connect(controller, &GameController::connectionError, this, [this]() {
+        startScreen->isConnected = false;
+        startScreen->showConnectionError("Failed to connect to the server.");
+    });
+    connect(controller, &GameController::serverDisconnected, this, [this]() {
+        qDebug() << "[MainWindow] Server disconnected - returning to start screen";
+        stack->setCurrentWidget(startScreen);
+        startScreen->isConnected = false;
+        startScreen->showConnectionError("Server disconnected.");
+    });
+    connect(startScreen, &StartScreen::reconnectRequested,
+        controller, &GameController::reconnectToServer);
+    connect(startScreen, &StartScreen::closeApplicationRequested,
+        this, &QMainWindow::close);
     connect(startScreen, &StartScreen::startClicked,
         controller, &GameController::loginRequested);
+    
+    // Próba połączenia po skonfigurowaniu wszystkich sygnałów
+    controller->connectToServerInitial();
     // Admin: prompt for password when server requests
     connect(controller, &GameController::adminPasswordRequired, this, [this]() {
         stack->setCurrentWidget(adminLoginScreen);

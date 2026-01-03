@@ -1,5 +1,6 @@
 #include "startscreen.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QFontDatabase>
 #include <QPixmap>
 #include <QDebug>
@@ -50,6 +51,32 @@ StartScreen::StartScreen(QWidget *parent)
     start_button->setMaximumWidth(300);
     layout->addWidget(start_button,0,Qt::AlignHCenter);
 
+    // Connection error widget (initially hidden)
+    error_widget = new QWidget();
+    QVBoxLayout *error_layout = new QVBoxLayout(error_widget);
+    
+    error_label = new QLabel("Failed to connect to the server.\nPlease try again or close the application.");
+    error_label->setAlignment(Qt::AlignCenter);
+    error_label->setFont(appFont);
+    error_label->setStyleSheet("QLabel { color: red; }");
+    error_layout->addWidget(error_label, 0, Qt::AlignCenter);
+    
+    QHBoxLayout *button_layout = new QHBoxLayout();
+    
+    retry_button = new QPushButton("Retry");
+    retry_button->setFont(appFont);
+    retry_button->setMaximumWidth(150);
+    button_layout->addWidget(retry_button);
+    
+    close_button = new QPushButton("Close");
+    close_button->setFont(appFont);
+    close_button->setMaximumWidth(150);
+    button_layout->addWidget(close_button);
+    
+    error_layout->addLayout(button_layout);
+    error_widget->setVisible(false);
+    layout->addWidget(error_widget, 0, Qt::AlignCenter);
+
     setLayout(layout);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
@@ -62,6 +89,15 @@ StartScreen::StartScreen(QWidget *parent)
         QString login = login_enter->text();
         emit startClicked(login);
     });
+    
+    connect(retry_button, &QPushButton::clicked, this, [=]() {
+        error_widget->setVisible(false);
+        emit reconnectRequested();
+    });
+    
+    connect(close_button, &QPushButton::clicked, this, [=]() {
+        emit closeApplicationRequested();
+    });
 }
 
 void StartScreen::showLoginError(const QString &msg)
@@ -69,4 +105,14 @@ void StartScreen::showLoginError(const QString &msg)
     QMessageBox::warning(this, "Login failed", msg);
     login_enter->clear();
     login_enter->setFocus();
+}
+
+void StartScreen::showConnectionError(const QString &msg)
+{
+    error_widget->setVisible(true);
+}
+
+void StartScreen::hideConnectionError()
+{
+    error_widget->setVisible(false);
 }

@@ -2,9 +2,11 @@
 #include "../include/net.hpp"
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <cstring>
 #include <vector>
+#include <iostream>
 
 ClientConnection::ClientConnection() {}
 
@@ -26,13 +28,64 @@ bool ClientConnection::connectToServer(const std::string& ip, int port) {
     sockaddr_in sa{};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &sa.sin_addr);
-
-    if (connect(sock, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) < 0) {
+    
+    // Validate IP address format
+    if (inet_pton(AF_INET, ip.c_str(), &sa.sin_addr) <= 0) {
+        std::cerr << "Invalid IP address format: " << ip << std::endl;
         close(sock);
         sock = -1;
         return false;
     }
+
+    // Set socket to non-blocking mode for connect timeout
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    // Try to connect (will return immediately with EINPROGRESS)
+    int result = connect(sock, reinterpret_cast<sockaddr*>(&sa), sizeof(sa));
+    
+    if (result < 0) {
+        if (errno != EINPROGRESS) {
+            std::cerr << "Failed to connect to " << ip << ":" << port << " - " << strerror(errno) << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+        
+        // Wait for connection with 5 second timeout
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(sock, &write_fds);
+        
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        
+        result = select(sock + 1, nullptr, &write_fds, nullptr, &timeout);
+        
+        if (result <= 0) {
+            // Timeout or error
+            std::cerr << "Connection timeout to " << ip << ":" << port << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+        
+        // Check if connection succeeded
+        int error = 0;
+        socklen_t len = sizeof(error);
+        getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &len);
+        
+        if (error != 0) {
+            std::cerr << "Failed to connect to " << ip << ":" << port << " - " << strerror(error) << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+    }
+    
+    // Set socket back to blocking mode
+    fcntl(sock, F_SETFL, flags);
 
     running = true;
     recvThread = std::thread(&ClientConnection::recvLoop, this);

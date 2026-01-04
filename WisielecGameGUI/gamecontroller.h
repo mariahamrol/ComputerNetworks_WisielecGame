@@ -19,8 +19,8 @@ public slots:
     void guessLetterRequested(QChar letter);
     void exitGameRequested();
     void exitRoomRequested();
-    void reconnectToServer();
-    void connectToServerInitial();
+    void reconnectToServer(const QString &serverIp);
+    void connectToServerInitial(const QString &serverIp);
     // Admin slots
     void adminLoginRequested(const QString &password);
     void adminListGamesRequested();

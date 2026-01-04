@@ -129,7 +129,7 @@ MainWindow::MainWindow(QWidget *parent)
             controller, &GameController::startGameRequested);
 
     connect(controller, &GameController::gameStarted,
-            this, [&](int gameId,
+            this, [&](int /*gameId*/,
                 QString hiddenWord,
                 std::vector<QString> players,
                 QString myNick)
@@ -147,7 +147,7 @@ MainWindow::MainWindow(QWidget *parent)
             controller, &GameController::guessLetterRequested);
     
     connect(controller, &GameController::gameStateUpdated,
-            this, [&](int gameId,
+            this, [&](int /*gameId*/,
                 QString hiddenWord,
                 std::vector<QString> players,
                 std::vector<int> lives,

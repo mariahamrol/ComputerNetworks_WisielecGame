@@ -185,7 +185,7 @@ void GameController::loginRequested(const QString &login)
 void GameController::joinGameRequested(int gameId)
 {
     client->onJoinRoomOk =
-        [this](uint32_t gid,uint8_t playersCount,const std::string &owner,const std::vector<std::string> &players)
+        [this](uint32_t gid,uint8_t /*playersCount*/,const std::string &owner,const std::vector<std::string> &players)
     {
         qDebug() << "Joined game successfully, id=" << (int)gid;
         std::vector<QString> qplayers;
@@ -208,7 +208,7 @@ void GameController::joinGameRequested(int gameId)
 void GameController::createGameRequested()
 {
     qDebug() << "Creating game requested";
-    client->onCreateRoomOk = [this](uint32_t gameId, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players) {
+    client->onCreateRoomOk = [this](uint32_t gameId, uint8_t /*playersCount*/, const std::string &owner, const std::vector<std::string> &players) {
         qDebug() << "Game created successfully, id=" << (int)gameId;
         std::vector<QString> qplayers;
         for (const auto &p : players) qplayers.push_back(QString::fromStdString(p));
@@ -218,7 +218,7 @@ void GameController::createGameRequested()
         emit joinedGame(gameId, qplayers, qOwner, isHost);
     };
     client->onJoinRoomOk =
-        [this](uint32_t gid, uint8_t playersCount, const std::string &owner, const std::vector<std::string> &players)
+        [this](uint32_t gid, uint8_t /*playersCount*/, const std::string &owner, const std::vector<std::string> &players)
     {
         std::vector<QString> qplayers;
         for (const auto &p : players)

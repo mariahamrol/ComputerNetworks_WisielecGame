@@ -107,7 +107,7 @@ void StartScreen::showLoginError(const QString &msg)
     login_enter->setFocus();
 }
 
-void StartScreen::showConnectionError(const QString &msg)
+void StartScreen::showConnectionError(const QString &/*msg*/)
 {
     error_widget->setVisible(true);
 }

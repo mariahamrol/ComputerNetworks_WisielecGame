@@ -78,7 +78,6 @@ private:
 	std::optional<MsgGameState> lastGameState;
 
     void recvLoop();
-    void handleMessage(MsgHeader& hdr, char* payload);
-
+    void handleMessage(const MsgHeader& hdr, char* payload);  // const added for cppcheck
 
 };

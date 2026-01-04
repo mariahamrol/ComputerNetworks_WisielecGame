@@ -16,11 +16,6 @@ std::optional<MsgLobbyState> ClientConnection::getLastLobbyState() {
     std::lock_guard<std::mutex> lock(lobbyMutex);
     return lastLobbyState;
 }
-std::optional<MsgGameState> ClientConnection::getLastGameState() {
-    std::lock_guard<std::mutex> lock(gameStateMutex);
-    return lastGameState;
-}
-
 
 bool ClientConnection::connectToServer(const std::string& ip, int port) {
 	disconnect();
@@ -33,7 +28,7 @@ bool ClientConnection::connectToServer(const std::string& ip, int port) {
     sa.sin_port = htons(port);
     inet_pton(AF_INET, ip.c_str(), &sa.sin_addr);
 
-    if (connect(sock, (sockaddr*)&sa, sizeof(sa)) < 0) {
+    if (connect(sock, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) < 0) {
         close(sock);
         sock = -1;
         return false;
@@ -70,12 +65,12 @@ void ClientConnection::createRoom() {
     send_msg(sock, MSG_CREATE_ROOM_REQ, nullptr, 0);
 }
 
-void ClientConnection::joinRoom(uint32_t id) {
-    MsgGameIdReq req{ id };
+void ClientConnection::joinRoom(uint32_t roomId) {
+    MsgGameIdReq req{ roomId };
     send_msg(sock, MSG_JOIN_ROOM_REQ, &req, sizeof(req));
 }
-void ClientConnection::startGame(uint32_t id) {
-	MsgGameIdReq req{ id };
+void ClientConnection::startGame(uint32_t roomId) {
+	MsgGameIdReq req{ roomId };
 	send_msg(sock, MSG_START_GAME_REQ, &req, sizeof(req));
 }
 void ClientConnection::guessLetter(char letter) {
@@ -123,10 +118,10 @@ void ClientConnection::recvLoop() {
     }
 }
 
-void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
+void ClientConnection::handleMessage(const MsgHeader& hdr, char* payload) {
     switch (hdr.type) {
 		case MSG_GAME_STATE: {
-			MsgGameState copy = *(MsgGameState*)payload;
+			MsgGameState copy = *reinterpret_cast<MsgGameState*>(payload);
 			{
 				std::lock_guard<std::mutex> lock(gameStateMutex);
 				lastGameState = copy;
@@ -151,17 +146,17 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             if (onAdminLoginFail) onAdminLoginFail();
             break;
         case MSG_ADMIN_GAMES_LIST: {
-            MsgAdminGamesList list = *(MsgAdminGamesList*)payload;
+            MsgAdminGamesList list = *reinterpret_cast<MsgAdminGamesList*>(payload);
             if (onAdminGamesList) onAdminGamesList(list);
             break;
         }
         case MSG_ADMIN_USERS_LIST: {
-            MsgAdminUsersList list = *(MsgAdminUsersList*)payload;
+            MsgAdminUsersList list = *reinterpret_cast<MsgAdminUsersList*>(payload);
             if (onAdminUsersList) onAdminUsersList(list);
             break;
         }
         case MSG_ADMIN_GAME_DETAILS: {
-            MsgAdminGameDetails details = *(MsgAdminGameDetails*)payload;
+            MsgAdminGameDetails details = *reinterpret_cast<MsgAdminGameDetails*>(payload);
             if (onAdminGameDetails) onAdminGameDetails(details);
             break;
         }
@@ -172,7 +167,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             if (onAdminTerminateFail) onAdminTerminateFail();
             break;
 		case MSG_LOBBY_STATE: {
-			MsgLobbyState copy = *(MsgLobbyState*)payload;
+			MsgLobbyState copy = *reinterpret_cast<MsgLobbyState*>(payload);
 			{
 				std::lock_guard<std::mutex> lock(lobbyMutex);
 				lastLobbyState = copy;
@@ -182,7 +177,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 			break;
 		}
         case MSG_CREATE_ROOM_OK: {
-            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            MsgRoomInfo info = *reinterpret_cast<MsgRoomInfo*>(payload);
             std::vector<std::string> players;
             for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
                 players.emplace_back(info.players[i]);
@@ -192,7 +187,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             break;
         }
         case MSG_JOIN_ROOM_OK: {
-            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            MsgRoomInfo info = *reinterpret_cast<MsgRoomInfo*>(payload);
             std::vector<std::string> players;
             for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
                 players.emplace_back(info.players[i]);
@@ -231,7 +226,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 			if (onGameEnd) onGameEnd();
 			break;
 		case MSG_GAME_RESULTS: {
-			MsgGameResults results = *(MsgGameResults*)payload;
+			MsgGameResults results = *reinterpret_cast<MsgGameResults*>(payload);
 			if (onGameResults) onGameResults(results);
 			break;
 		}

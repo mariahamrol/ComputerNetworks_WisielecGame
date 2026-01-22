@@ -13,6 +13,7 @@ class StartScreen : public QWidget
 public:
     explicit StartScreen(QWidget *parent = nullptr);
     bool isConnected = false;
+    QString getServerIp() const;
 public slots:
     void showLoginError(const QString &msg);
     void showConnectionError(const QString &msg);
@@ -20,13 +21,14 @@ public slots:
 
 signals:
     void startClicked(const QString login);
-    void reconnectRequested();
+    void reconnectRequested(const QString serverIp);
     void closeApplicationRequested();
 
 private:
     QPushButton *start_button;
     QLabel *welcome_label;
     QLineEdit *login_enter;
+    QLineEdit *server_ip_enter;
     QLabel *picture;        // for logo/image
     QString *login;
     

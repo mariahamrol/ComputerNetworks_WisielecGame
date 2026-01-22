@@ -36,22 +36,22 @@ std::unordered_map<uint32_t, Game> games;
 std::unordered_map<char, PendingGuess> pending_guesses;
 
 // --- Forward Declarations ---
-void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg);
-void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg);
+void handle_login(std::shared_ptr<Client> client, const MsgLoginReq *msg);
+void handle_admin_login(std::shared_ptr<Client> client, const MsgAdminLoginReq *msg);
 void handle_admin_list_games(std::shared_ptr<Client> client);
 void handle_admin_list_users(std::shared_ptr<Client> client);
 void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg);
-void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg);
+void handle_admin_terminate_game(std::shared_ptr<Client> client, const MsgGameIdReq* msg);
 void handle_create_room(std::shared_ptr<Client> client);
 void disconnect_client(int cfd, int epoll_fd);
-void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* payload);
+void process_message(std::shared_ptr<Client> client, const MsgHeader& hdr, char* payload);
 void handle_client_data(std::shared_ptr<Client> client, int epoll_fd);
 void broadcast_lobby_state();
 void send_lobby_state(std::shared_ptr<Client> client);
 void broadcast_admin_games();
 void broadcast_admin_users();
-void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
-void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg);
+void handle_join_room(std::shared_ptr<Client> client, const MsgGameIdReq *msg);
+void handle_start_game(std::shared_ptr<Client> client, const MsgGameIdReq *msg);
 void create_game_word(Game& game);
 void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg);
 void broadcast_game_state(Game& game);
@@ -59,7 +59,7 @@ void delete_player_from_game(std::shared_ptr<Client> client);
 void send_game_results(Game& game);
 void delete_game(uint32_t game_id);
 void start_new_turn(Game& game);
-void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload = nullptr, uint16_t length = 0);
+void broadcast_to_game(const Game& game, uint16_t msg_type, const void* payload = nullptr, uint16_t length = 0);
 void user_exit_game(std::shared_ptr<Client> client);
 void user_exit_room(std::shared_ptr<Client> client);
 void handle_shutdown(int sig);
@@ -90,7 +90,7 @@ int main() {
 	sa.sin_addr.s_addr = INADDR_ANY;
     // sa.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    if (bind(sfd, (sockaddr*)&sa, sizeof(sa)) < 0) {
+    if (bind(sfd, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) < 0) {
         perror("bind");
         close(sfd);
         return 1;
@@ -232,7 +232,7 @@ void handle_client_data(std::shared_ptr<Client> client, int epoll_fd) {
     }
 }
 
-void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* payload) {
+void process_message(std::shared_ptr<Client> client, const MsgHeader& hdr, char* payload) {
     if (client->state < STATE_LOGGING_IN && hdr.type != MSG_LOGIN_REQ) {
         printf("Nieprawidłowa wiadomość przed logowaniem (fd=%d)\n", client->fd);
         return;
@@ -240,7 +240,7 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 
     switch (hdr.type) {
         case MSG_LOGIN_REQ:
-            handle_login(client, (MsgLoginReq*)payload);
+            handle_login(client, reinterpret_cast<MsgLoginReq*>(payload));
             break;
 		case MSG_ADMIN_LIST_GAMES_REQ:
 			handle_admin_list_games(client);
@@ -249,25 +249,25 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 			handle_admin_list_users(client);
 			break;
 		case MSG_ADMIN_GAME_DETAILS_REQ:
-			handle_admin_game_details(client, (MsgGameIdReq*)payload);
+			handle_admin_game_details(client, reinterpret_cast<MsgGameIdReq*>(payload));
 			break;
 		case MSG_ADMIN_LOGIN_REQ:
-			handle_admin_login(client, (MsgAdminLoginReq*)payload);
+			handle_admin_login(client, reinterpret_cast<MsgAdminLoginReq*>(payload));
 			break;
 		case MSG_ADMIN_TERMINATE_GAME:
-			handle_admin_terminate_game(client, (MsgGameIdReq*)payload);
+			handle_admin_terminate_game(client, reinterpret_cast<MsgGameIdReq*>(payload));
 			break;
 		case MSG_CREATE_ROOM_REQ:
 			handle_create_room(client);
 			break;
 		case MSG_JOIN_ROOM_REQ:
-			handle_join_room(client, (MsgGameIdReq*)payload);
+			handle_join_room(client, reinterpret_cast<MsgGameIdReq*>(payload));
 			break;
 		case MSG_START_GAME_REQ:
-			handle_start_game(client, (MsgGameIdReq*)payload);
+			handle_start_game(client, reinterpret_cast<const MsgGameIdReq*>(payload));
 			break;
 		case  MSG_GUESS_LETTER_REQ:
-			handle_guess_letter(client, (MsgGuessLetterReq*)payload);
+			handle_guess_letter(client, reinterpret_cast<MsgGuessLetterReq*>(payload));
 			break;
 		case MSG_EXIT_GAME_REQ:
 			user_exit_game(client);
@@ -282,7 +282,7 @@ void process_message(std::shared_ptr<Client> client, MsgHeader& hdr, char* paylo
 }
 
 void handle_guess_letter(std::shared_ptr<Client> client,  MsgGuessLetterReq *msg) {
-	if (client->state != STATE_IN_GAME || !client->is_active || client->lives <= 0){
+	if (client->state != STATE_IN_GAME || !client->is_active || client->lives == 0){
 		printf("Nieautoryzowana próba odgadnięcia litery przez %s, state=%d, is_active=%d, lives=%d\n", client->nick, client->state, client->is_active, client->lives);
 		if(send_msg(client->fd, MSG_GUESS_LETTER_FAIL, nullptr, 0) != 0) {
 			perror("send_msg GUESS_LETTER_FAIL");
@@ -444,7 +444,7 @@ void start_new_turn(Game& game) {
 	broadcast_game_state(game);
 }
 
-void broadcast_to_game(Game& game, uint16_t msg_type, const void* payload, uint16_t length) {
+void broadcast_to_game(const Game& game, uint16_t msg_type, const void* payload, uint16_t length) {
     for (int i = 0; i < game.player_count; ++i) {
         int pfd = game.players[i];
         if (clients.find(pfd) == clients.end())
@@ -463,8 +463,8 @@ Game* find_game_by_id(uint32_t game_id) {
     return &it->second;
 }
 
-void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
-	printf("Gracz %s próbuje rozpocząć grę id=%d\n", client->nick, msg->game_id);
+void handle_start_game(std::shared_ptr<Client> client, const MsgGameIdReq *msg) {
+	printf("Gracz %s próbuje rozpocząć grę id=%u\n", client->nick, msg->game_id);
 	if (client->state != STATE_IN_ROOM || !client->is_owner) {
 		printf("Nieautoryzowana próba rozpoczęcia gry przez %s, state=%d, is_owner=%d\n", client->nick, client->state, client->is_owner);
 		if (send_msg(client->fd, MSG_START_GAME_FAIL, nullptr, 0) != 0) {
@@ -476,7 +476,7 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	Game* game = find_game_by_id(msg->game_id);
 
 	if (game == nullptr || game->active || game->player_count < 2) { // Gra nie istnieje lub już rozpoczęta lub za mało graczy
-		printf("Nieprawidłowa próba rozpoczęcia gry id=%d przez %s. Game active=%d, player_count=%d\n", msg->game_id, client->nick, game->active, game->player_count);
+		printf("Nieprawidłowa próba rozpoczęcia gry id=%u przez %s\n", msg->game_id, client->nick);
 		if (send_msg(client->fd, MSG_START_GAME_FAIL, nullptr, 0) != 0) {
 			perror("send_msg START_GAME_FAIL");
 		}
@@ -503,11 +503,11 @@ void handle_start_game(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 		auto it = clients.find(pfd);
 		if (it == clients.end())
 			return;// Already disconnected
-		auto client = it->second;
-		client->state = STATE_IN_GAME; 
-		client->is_active = 1;
-		client->lives = MAX_LIVES;
-		client->points = 0;
+		auto player_client = it->second;
+		player_client->state = STATE_IN_GAME; 
+		player_client->is_active = 1;
+		player_client->lives = MAX_LIVES;
+		player_client->points = 0;
 		memset(client->guessed_letters, 0, ALPHABET_SIZE);
 		if (send_msg(pfd, MSG_START_GAME_OK, nullptr, 0) != 0) {
 			perror("send_msg START_GAME_OK");
@@ -537,7 +537,7 @@ void create_game_word(Game& game) {
     }
 }
 
-void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
+void handle_join_room(std::shared_ptr<Client> client, const MsgGameIdReq *msg) {
 	if (client->state != STATE_LOBBY) {
 		if (send_msg(client->fd, MSG_JOIN_ROOM_FAIL, nullptr, 0) != 0) {
 			perror("send_msg JOIN_ROOM_FAIL");
@@ -589,8 +589,8 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 
 	printf("Gry dostępne na serwerze po dołączeniu nowego gracza:\n");
 
-	for (const auto& [id, game] : games) {
-		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
+	for (const auto& [id, g] : games) {
+		printf("Gry id=%u liczba graczy=%d\n", g.id, g.player_count);
 	}
 
 	broadcast_lobby_state();
@@ -599,7 +599,7 @@ void handle_join_room(std::shared_ptr<Client> client,  MsgGameIdReq *msg) {
 	broadcast_admin_users();
 }
 
-void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
+void handle_login(std::shared_ptr<Client> client, const MsgLoginReq *msg) {
     client->state = STATE_LOGGING_IN;
 
     char received_nick[MAX_NICK_LEN];
@@ -611,7 +611,8 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 
 	if (strcmp(received_nick, "admin") == 0) {
 		client->state = STATE_WAIT_ADMIN_PASSWORD;
-        strcpy(client->nick, "admin");
+        strncpy(client->nick, "admin", MAX_NICK_LEN - 1);
+		client->nick[MAX_NICK_LEN - 1] = '\0';
         send_msg(client->fd, MSG_ADMIN_PASSWORD_REQUIRED, nullptr, 0);
 		printf("Oczekiwanie na hasło admina (fd=%d)\n", client->fd);
         return;
@@ -635,7 +636,8 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 		return;
 	}
 
-	strcpy(client->nick, received_nick);
+	strncpy(client->nick, received_nick, MAX_NICK_LEN - 1);
+	client->nick[MAX_NICK_LEN - 1] = '\0';
 	client->state = STATE_LOBBY;
 	send_msg(client->fd, MSG_LOGIN_OK, nullptr, 0);
 	send_lobby_state(client);
@@ -645,7 +647,7 @@ void handle_login(std::shared_ptr<Client> client, MsgLoginReq *msg) {
 
 }
 
-void handle_admin_login(std::shared_ptr<Client> client, MsgAdminLoginReq *msg) {
+void handle_admin_login(std::shared_ptr<Client> client, const MsgAdminLoginReq *msg) {
 	if (client->state != STATE_WAIT_ADMIN_PASSWORD) {
 		printf("Nieprawidłowa próba logowania admina przez (fd=%d)\n", client->fd);
 		send_msg(client->fd, MSG_ADMIN_LOGIN_FAIL, nullptr, 0);
@@ -680,7 +682,7 @@ void handle_admin_list_games(std::shared_ptr<Client> client) {
 		list.games_count++;
 	}
 	send_msg(client->fd, MSG_ADMIN_GAMES_LIST, &list, sizeof(list));
-	printf("Admin (fd=%d) pobrał listę %d gier\n", client->fd, list.games_count);
+	printf("Admin (fd=%d) pobrał listę %u gier\n", client->fd, list.games_count);
 }
 
 void handle_admin_list_users(std::shared_ptr<Client> client) {
@@ -714,7 +716,7 @@ void handle_admin_list_users(std::shared_ptr<Client> client) {
 	}
 	
 	send_msg(client->fd, MSG_ADMIN_USERS_LIST, &list, sizeof(list));
-	printf("Admin (fd=%d) pobrał listę %d użytkowników\n", client->fd, list.users_count);
+	printf("Admin (fd=%d) pobrał listę %u użytkowników\n", client->fd, list.users_count);
 }
 
 void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
@@ -725,7 +727,7 @@ void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg
 	
 	Game* game = find_game_by_id(msg->game_id);
 	if (game == nullptr) {
-		printf("Admin (fd=%d) próbował pobrać szczegóły nieistniejącej gry id=%d\n", client->fd, msg->game_id);
+		printf("Admin (fd=%d) próbował pobrać szczegóły nieistniejącej gry id=%u\n", client->fd, msg->game_id);
 		send_msg(client->fd, MSG_ERROR, nullptr, 0);
 		return;
 	}
@@ -769,15 +771,15 @@ void handle_admin_game_details(std::shared_ptr<Client> client, MsgGameIdReq* msg
 	printf("Admin (fd=%d) pobrał szczegóły gry id=%d\n", client->fd, game->id);
 }
 
-void handle_admin_terminate_game(std::shared_ptr<Client> client, MsgGameIdReq* msg) {
+void handle_admin_terminate_game(std::shared_ptr<Client> client, const MsgGameIdReq* msg) {
 	if (client->state != STATE_ADMIN) {
 		printf("Nieautoryzowana próba zakończenia gry (fd=%d)\n", client->fd);
 		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
 		return;
 	}
-	Game* game = find_game_by_id(msg->game_id);
+	const Game* game = find_game_by_id(msg->game_id);
 	if (game == nullptr) {
-		printf("Nie można zakończyć gry id=%d – nie istnieje\n", msg->game_id);
+		printf("Nie można zakończyć gry id=%u – nie istnieje\n", msg->game_id);
 		send_msg(client->fd, MSG_ADMIN_TERMINATE_FAIL, nullptr, 0);
 		return;
 	}
@@ -846,7 +848,7 @@ void delete_game(uint32_t game_id) {
 			}
 		}
 		games.erase(it);
-		printf("Gra id=%d zakończona i usunięta\n", game_id);
+		printf("Gra id=%u zakończona i usunięta\n", game_id);
 		// Wyślij zaktualizowany stan lobby do wszystkich klientów
 		broadcast_lobby_state();
 		broadcast_admin_games();
@@ -887,7 +889,7 @@ void user_exit_game(std::shared_ptr<Client> client) {
 	
 	// MSG_GAME_RESULTS and MSG_GAME_END are sent inside delete_player_from_game if needed
 	// Send EXIT_GAME_OK only if game didn't end (still exists)
-	Game* game = find_game_by_id(saved_game_id);
+	const Game* game = find_game_by_id(saved_game_id);
 	if (game != nullptr) {
 		if (send_msg(client->fd, MSG_EXIT_GAME_OK, nullptr, 0) != 0) {
 			printf("błąd przy wysyłaniu EXIT_GAME_OK do %s (fd=%d)\n", client->nick, client->fd);
@@ -899,7 +901,7 @@ void user_exit_game(std::shared_ptr<Client> client) {
 void delete_player_from_game(std::shared_ptr<Client> client){
 	Game* game = find_game_by_id(client->game_id);
 	if (game == nullptr) {
-		printf("Klient %s opuszcza grę id=%d\n", client->nick, game->id);
+		printf("Klient %s próbuje opuścić nieistniejącą grę\n", client->nick);
 		if (send_msg(client->fd, MSG_EXIT_GAME_FAIL, nullptr, 0) != 0) {
 			perror("send_msg EXIT_GAME_FAIL");
 		}
@@ -939,6 +941,7 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 
 	// Now end the game if needed (MSG_GAME_RESULTS already sent)
 	if (will_end_game) {
+		uint32_t game_id_to_delete = game->id;  // Save ID before erase
 		// Clean up remaining players (DON'T send MSG_GAME_END - results already sent)
 		for(int i = 0; i < game->player_count; ++i) {
 			int pfd = game->players[i];
@@ -954,8 +957,8 @@ void delete_player_from_game(std::shared_ptr<Client> client){
 				// MSG_GAME_END not sent - MSG_GAME_RESULTS is the final message
 			}
 		}
-		games.erase(game->id);
-		printf("Gra id=%d zakończona z powodu braku graczy\n", game->id);
+		games.erase(game_id_to_delete);
+		printf("Gra id=%u zakończona z powodu braku graczy\n", game_id_to_delete);
 		broadcast_lobby_state();
 		broadcast_admin_games();
 		broadcast_admin_users();
@@ -1063,8 +1066,8 @@ void handle_create_room(std::shared_ptr<Client> client) {
 	
 	printf("Gry dostępne na serwerze:\n");
 
-	for (const auto& [id, game] : games) {
-		printf("Gry id=%d liczba graczy=%d\n", game.id, game.player_count);
+	for (const auto& [id, g] : games) {
+		printf("Gry id=%u liczba graczy=%d\n", g.id, g.player_count);
 	}
 
 	broadcast_lobby_state();

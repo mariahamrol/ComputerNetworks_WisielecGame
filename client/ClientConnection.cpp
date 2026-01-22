@@ -2,9 +2,11 @@
 #include "../include/net.hpp"
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <cstring>
 #include <vector>
+#include <iostream>
 
 ClientConnection::ClientConnection() {}
 
@@ -16,26 +18,74 @@ std::optional<MsgLobbyState> ClientConnection::getLastLobbyState() {
     std::lock_guard<std::mutex> lock(lobbyMutex);
     return lastLobbyState;
 }
-std::optional<MsgGameState> ClientConnection::getLastGameState() {
-    std::lock_guard<std::mutex> lock(gameStateMutex);
-    return lastGameState;
-}
-
 
 bool ClientConnection::connectToServer(const std::string& ip, int port) {
+	disconnect();
+
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) return false;
 
     sockaddr_in sa{};
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &sa.sin_addr);
-
-    if (connect(sock, (sockaddr*)&sa, sizeof(sa)) < 0) {
+    
+    // Validate IP address format
+    if (inet_pton(AF_INET, ip.c_str(), &sa.sin_addr) <= 0) {
+        std::cerr << "Invalid IP address format: " << ip << std::endl;
         close(sock);
         sock = -1;
         return false;
     }
+
+    // Set socket to non-blocking mode for connect timeout
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    // Try to connect (will return immediately with EINPROGRESS)
+    int result = connect(sock, reinterpret_cast<sockaddr*>(&sa), sizeof(sa));
+    
+    if (result < 0) {
+        if (errno != EINPROGRESS) {
+            std::cerr << "Failed to connect to " << ip << ":" << port << " - " << strerror(errno) << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+        
+        // Wait for connection with 5 second timeout
+        fd_set write_fds;
+        FD_ZERO(&write_fds);
+        FD_SET(sock, &write_fds);
+        
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        
+        result = select(sock + 1, nullptr, &write_fds, nullptr, &timeout);
+        
+        if (result <= 0) {
+            // Timeout or error
+            std::cerr << "Connection timeout to " << ip << ":" << port << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+        
+        // Check if connection succeeded
+        int error = 0;
+        socklen_t len = sizeof(error);
+        getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &len);
+        
+        if (error != 0) {
+            std::cerr << "Failed to connect to " << ip << ":" << port << " - " << strerror(error) << std::endl;
+            close(sock);
+            sock = -1;
+            return false;
+        }
+    }
+    
+    // Set socket back to blocking mode
+    fcntl(sock, F_SETFL, flags);
 
     running = true;
     recvThread = std::thread(&ClientConnection::recvLoop, this);
@@ -68,12 +118,12 @@ void ClientConnection::createRoom() {
     send_msg(sock, MSG_CREATE_ROOM_REQ, nullptr, 0);
 }
 
-void ClientConnection::joinRoom(uint32_t id) {
-    MsgGameIdReq req{ id };
+void ClientConnection::joinRoom(uint32_t roomId) {
+    MsgGameIdReq req{ roomId };
     send_msg(sock, MSG_JOIN_ROOM_REQ, &req, sizeof(req));
 }
-void ClientConnection::startGame(uint32_t id) {
-	MsgGameIdReq req{ id };
+void ClientConnection::startGame(uint32_t roomId) {
+	MsgGameIdReq req{ roomId };
 	send_msg(sock, MSG_START_GAME_REQ, &req, sizeof(req));
 }
 void ClientConnection::guessLetter(char letter) {
@@ -121,10 +171,10 @@ void ClientConnection::recvLoop() {
     }
 }
 
-void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
+void ClientConnection::handleMessage(const MsgHeader& hdr, char* payload) {
     switch (hdr.type) {
 		case MSG_GAME_STATE: {
-			MsgGameState copy = *(MsgGameState*)payload;
+			MsgGameState copy = *reinterpret_cast<MsgGameState*>(payload);
 			{
 				std::lock_guard<std::mutex> lock(gameStateMutex);
 				lastGameState = copy;
@@ -149,17 +199,17 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             if (onAdminLoginFail) onAdminLoginFail();
             break;
         case MSG_ADMIN_GAMES_LIST: {
-            MsgAdminGamesList list = *(MsgAdminGamesList*)payload;
+            MsgAdminGamesList list = *reinterpret_cast<MsgAdminGamesList*>(payload);
             if (onAdminGamesList) onAdminGamesList(list);
             break;
         }
         case MSG_ADMIN_USERS_LIST: {
-            MsgAdminUsersList list = *(MsgAdminUsersList*)payload;
+            MsgAdminUsersList list = *reinterpret_cast<MsgAdminUsersList*>(payload);
             if (onAdminUsersList) onAdminUsersList(list);
             break;
         }
         case MSG_ADMIN_GAME_DETAILS: {
-            MsgAdminGameDetails details = *(MsgAdminGameDetails*)payload;
+            MsgAdminGameDetails details = *reinterpret_cast<MsgAdminGameDetails*>(payload);
             if (onAdminGameDetails) onAdminGameDetails(details);
             break;
         }
@@ -170,7 +220,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             if (onAdminTerminateFail) onAdminTerminateFail();
             break;
 		case MSG_LOBBY_STATE: {
-			MsgLobbyState copy = *(MsgLobbyState*)payload;
+			MsgLobbyState copy = *reinterpret_cast<MsgLobbyState*>(payload);
 			{
 				std::lock_guard<std::mutex> lock(lobbyMutex);
 				lastLobbyState = copy;
@@ -180,7 +230,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 			break;
 		}
         case MSG_CREATE_ROOM_OK: {
-            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            MsgRoomInfo info = *reinterpret_cast<MsgRoomInfo*>(payload);
             std::vector<std::string> players;
             for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
                 players.emplace_back(info.players[i]);
@@ -190,7 +240,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
             break;
         }
         case MSG_JOIN_ROOM_OK: {
-            MsgRoomInfo info = *(MsgRoomInfo*)payload;
+            MsgRoomInfo info = *reinterpret_cast<MsgRoomInfo*>(payload);
             std::vector<std::string> players;
             for (uint8_t i = 0; i < info.players_count && i < 8; ++i) {
                 players.emplace_back(info.players[i]);
@@ -229,7 +279,7 @@ void ClientConnection::handleMessage(MsgHeader& hdr, char* payload) {
 			if (onGameEnd) onGameEnd();
 			break;
 		case MSG_GAME_RESULTS: {
-			MsgGameResults results = *(MsgGameResults*)payload;
+			MsgGameResults results = *reinterpret_cast<MsgGameResults*>(payload);
 			if (onGameResults) onGameResults(results);
 			break;
 		}

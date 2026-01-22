@@ -13,5 +13,7 @@ server/Makefile
 WisielecGameGUI/build/
 
 .vscode/server/server.exe
+.vscode/server/server_debug.exe
+.vscode/client/client.exe
 server.exe§
 a.out

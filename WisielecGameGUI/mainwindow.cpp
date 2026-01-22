@@ -59,11 +59,17 @@ MainWindow::MainWindow(QWidget *parent)
         controller, &GameController::reconnectToServer);
     connect(startScreen, &StartScreen::closeApplicationRequested,
         this, &QMainWindow::close);
+    
+    // Connect when user clicks start - get server IP and connect, then send login
+    connect(startScreen, &StartScreen::startClicked, this, [this]() {
+        if (!startScreen->isConnected) {
+            controller->connectToServerInitial(startScreen->getServerIp());
+        }
+    });
+    
     connect(startScreen, &StartScreen::startClicked,
         controller, &GameController::loginRequested);
-    
-    // Próba połączenia po skonfigurowaniu wszystkich sygnałów
-    controller->connectToServerInitial();
+
     // Admin: prompt for password when server requests
     connect(controller, &GameController::adminPasswordRequired, this, [this]() {
         stack->setCurrentWidget(adminLoginScreen);
@@ -128,6 +134,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(waitingScreen, &WaitingRoomScreen::startGame,
             controller, &GameController::startGameRequested);
 
+
         connect(controller, &GameController::gameStarted,
             this, [&](int,
                 QString hiddenWord,
@@ -146,6 +153,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(gameScreen, &GameScreen::letterClicked,
             controller, &GameController::guessLetterRequested);
     
+
         connect(controller, &GameController::gameStateUpdated,
             this, [&](int,
                 QString hiddenWord,

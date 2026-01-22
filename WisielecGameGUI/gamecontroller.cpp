@@ -319,10 +319,10 @@ void GameController::adminTerminateGameRequested(int gameId) {
     client->adminTerminateGame((uint32_t)gameId);
 }
 
-void GameController::reconnectToServer()
+void GameController::reconnectToServer(const QString &serverIp)
 {
-    qDebug() << "[GameController] Attempting to reconnect to server...";
-    if(client->connectToServer("127.0.0.1", 12345)) {
+    qDebug() << "[GameController] Attempting to reconnect to server at" << serverIp;
+    if(client->connectToServer(serverIp.toStdString(), 12345)) {
         emit connectionSuccessful();
         qDebug() << "[GameController] Reconnected to server successfully";
     } else {
@@ -331,10 +331,10 @@ void GameController::reconnectToServer()
     }
 }
 
-void GameController::connectToServerInitial()
+void GameController::connectToServerInitial(const QString &serverIp)
 {
-    qDebug() << "[GameController] Initial connection attempt...";
-    if(!client->connectToServer("127.0.0.1", 12345)) {
+    qDebug() << "[GameController] Initial connection attempt to" << serverIp;
+    if(!client->connectToServer(serverIp.toStdString(), 12345)) {
         emit connectionError();
         qDebug() << "[GameController] Error connecting to server";
     } 

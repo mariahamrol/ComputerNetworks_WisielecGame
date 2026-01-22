@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QFontDatabase>
 #include <QSet>
+#include <QCoreApplication>
 
 #define MAX_LIVES 10
 
@@ -13,7 +14,8 @@ GameScreen::GameScreen(QWidget *parent)
 {
 
     QFont appFont;
-    int fontId = QFontDatabase::addApplicationFont("C:/Users/marha/Documents/studia/term_5/sk2/ComputerNetworks_WisielecGame/WisielecGameGUI/assets/fonts/Orbitron-VariableFont_wght.ttf");
+    int fontId = QFontDatabase::addApplicationFont(
+        QCoreApplication::applicationDirPath() + "/../assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
         appFont = QFont(family);

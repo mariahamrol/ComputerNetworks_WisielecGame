@@ -1,12 +1,13 @@
 #include "waitingroomscreen.h"
 #include <QVBoxLayout>
 #include <QFontDatabase>
+#include <QCoreApplication>
 
 WaitingRoomScreen::WaitingRoomScreen(QWidget *parent)
     : QWidget(parent)
 {
     QFont appFont;
-    int fontId = QFontDatabase::addApplicationFont("./assets/fonts/Orbitron-VariableFont_wght.ttf");
+    int fontId = QFontDatabase::addApplicationFont(QCoreApplication::applicationDirPath() + "/../assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
         appFont = QFont(family);

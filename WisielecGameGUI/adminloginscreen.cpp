@@ -4,10 +4,11 @@
 #include <QPixmap>
 #include <QDebug>
 #include <QMessageBox>
+#include <QCoreApplication>
 
 AdminLoginScreen::AdminLoginScreen(QWidget *parent) : QWidget(parent) {
     QFont appFont;
-    int fontId = QFontDatabase::addApplicationFont("./assets/fonts/Orbitron-VariableFont_wght.ttf");
+    int fontId = QFontDatabase::addApplicationFont(QCoreApplication::applicationDirPath() + "/../assets/fonts/Orbitron-VariableFont_wght.ttf");
     if (fontId != -1) {
         QString family = QFontDatabase::applicationFontFamilies(fontId).at(0);
         appFont = QFont(family, 20, QFont::Bold);

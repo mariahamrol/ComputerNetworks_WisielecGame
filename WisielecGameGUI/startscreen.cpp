@@ -109,6 +109,7 @@ void StartScreen::showLoginError(const QString &msg)
 
 void StartScreen::showConnectionError(const QString &msg)
 {
+    (void)msg;
     error_widget->setVisible(true);
 }
 

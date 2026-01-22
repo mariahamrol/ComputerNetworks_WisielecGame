@@ -128,8 +128,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(waitingScreen, &WaitingRoomScreen::startGame,
             controller, &GameController::startGameRequested);
 
-    connect(controller, &GameController::gameStarted,
-            this, [&](int gameId,
+        connect(controller, &GameController::gameStarted,
+            this, [&](int,
                 QString hiddenWord,
                 std::vector<QString> players,
                 QString myNick)
@@ -146,8 +146,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(gameScreen, &GameScreen::letterClicked,
             controller, &GameController::guessLetterRequested);
     
-    connect(controller, &GameController::gameStateUpdated,
-            this, [&](int gameId,
+        connect(controller, &GameController::gameStateUpdated,
+            this, [&](int,
                 QString hiddenWord,
                 std::vector<QString> players,
                 std::vector<int> lives,

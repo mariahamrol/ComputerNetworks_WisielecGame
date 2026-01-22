@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <chrono>
 #include "../include/states.h"
 
 #define ALPHABET_SIZE 32
@@ -18,6 +19,8 @@ struct Client {
 	uint8_t lives;
     uint16_t points;
     std::vector<char> buffer;
+	std::chrono::steady_clock::time_point last_activity;
+    std::chrono::steady_clock::time_point last_ping_sent;
 };
 
 #endif

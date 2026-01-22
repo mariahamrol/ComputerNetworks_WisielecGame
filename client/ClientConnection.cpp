@@ -309,6 +309,11 @@ void ClientConnection::handleMessage(const MsgHeader& hdr, char* payload) {
 		case MSG_CREATE_ROOM_FAIL:
 			if (onCreateRoomFail) onCreateRoomFail();
 			break;
+		case MSG_PING:
+            send_msg(sock, MSG_PONG, nullptr, 0);
+            break;
+        case MSG_PONG:
+            break;
         default:
 			// Nieznany typ wiadomości
 			break;

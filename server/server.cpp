@@ -30,6 +30,9 @@ const char* admin_pwd = "3edcvfr4";
 static uint32_t next_game_id = 1;
 volatile sig_atomic_t server_running = 1;
 
+const auto PING_INTERVAL = std::chrono::seconds(5);
+const auto CONNECTION_TIMEOUT = std::chrono::seconds(10);
+
 // --- Global Server State ---
 std::map<int, std::shared_ptr<Client>> clients;
 std::unordered_map<uint32_t, Game> games;
@@ -65,6 +68,7 @@ void user_exit_room(std::shared_ptr<Client> client);
 void handle_shutdown(int sig);
 void graceful_shutdown();
 void resolve_pending_guesses();
+void check_connections_health(int epoll_fd);
 Game* find_game_by_id(uint32_t game_id);
 
 static void set_non_blocking(int fd) {
@@ -127,6 +131,7 @@ int main() {
         int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, 50);
 
 		resolve_pending_guesses();
+		check_connections_health(epoll_fd);
 
         if (n_events < 0) {
             perror("epoll_wait");
@@ -150,6 +155,8 @@ int main() {
                     client->is_active = 1;
                     client->state = STATE_CONNECTED;
                     client->game_id = -1;
+					client->last_activity = std::chrono::steady_clock::now(); 
+					client->last_ping_sent = std::chrono::steady_clock::now();
                     memset(client->nick, 0, sizeof(client->nick));
 
                     clients[cfd] = client;
@@ -203,6 +210,9 @@ void handle_client_data(std::shared_ptr<Client> client, int epoll_fd) {
             disconnect_client(cfd, epoll_fd);
         }
         return;
+    }
+	if (bytes_read > 0) {
+        client->last_activity = std::chrono::steady_clock::now(); 
     }
 
     client->buffer.insert(client->buffer.end(), read_buffer, read_buffer + bytes_read);
@@ -274,6 +284,8 @@ void process_message(std::shared_ptr<Client> client, const MsgHeader& hdr, char*
 			break;
 		case MSG_EXIT_ROOM_REQ:
 		 	user_exit_room(client);
+			break;
+		case MSG_PONG:
 			break;
         default:
             printf("Nieznany typ wiadomości %d (fd=%d)\n", hdr.type, client->fd);
@@ -1184,4 +1196,33 @@ void graceful_shutdown() {
     }
 
     clients.clear();
+}
+
+void check_connections_health(int epoll_fd) {
+    auto now = std::chrono::steady_clock::now();
+
+    for (auto it = clients.begin(); it != clients.end(); ) {
+        auto client = it->second;
+        int fd = client->fd; 
+
+        auto time_since_activity = std::chrono::duration_cast<std::chrono::seconds>(
+            now - client->last_activity).count();
+
+        if (now - client->last_activity > CONNECTION_TIMEOUT) {
+            printf("TIMEOUT: Klient %s (fd=%d) nieaktywny od %ld sekund. Rozłączanie.\n", 
+                   client->nick[0] ? client->nick : "Unknown", fd, time_since_activity);
+            it++; 
+            disconnect_client(fd, epoll_fd);
+            continue; 
+        }
+
+        // 2. Jeśli jest cisza, wyślij PING
+        if (now - client->last_activity > PING_INTERVAL && 
+            now - client->last_ping_sent > PING_INTERVAL) {
+            send_msg(fd, MSG_PING, nullptr, 0);
+            client->last_ping_sent = now;
+        }
+
+        it++;
+    }
 }

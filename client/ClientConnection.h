@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <optional>
+#include <chrono>
 
 #include "../include/protocol.h"
 #include "../include/messages.h"
@@ -76,8 +77,9 @@ private:
     std::optional<MsgLobbyState> lastLobbyState;
 	std::mutex gameStateMutex;
 	std::optional<MsgGameState> lastGameState;
+    std::chrono::steady_clock::time_point lastServerActivity;
+    const std::chrono::seconds SERVER_TIMEOUT{10};
 
     void recvLoop();
-    void handleMessage(const MsgHeader& hdr, char* payload);  // const added for cppcheck
-
+    void handleMessage(const MsgHeader& hdr, char* payload);
 };

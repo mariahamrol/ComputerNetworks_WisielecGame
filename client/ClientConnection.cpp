@@ -83,7 +83,9 @@ bool ClientConnection::connectToServer(const std::string& ip, int port) {
             return false;
         }
     }
-    
+
+    lastServerActivity = std::chrono::steady_clock::now();
+
     // Set socket back to blocking mode
     fcntl(sock, F_SETFL, flags);
 
@@ -159,6 +161,40 @@ void ClientConnection::recvLoop() {
     char buffer[4096];
 
     while (running) {
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(sock, &read_fds);
+
+        // set timeout for select to 1 second  
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        int retval = select(sock + 1, &read_fds, nullptr, nullptr, &tv);
+
+        if (retval == -1) {
+            perror("select");
+            running = false;
+            break;
+        } else if (retval == 0) {
+            // select timed out
+            // Check for server timeout
+            auto now = std::chrono::steady_clock::now();
+            auto timeSinceLastMsg = std::chrono::duration_cast<std::chrono::seconds>(now - lastServerActivity).count();
+
+            if (now - lastServerActivity > SERVER_TIMEOUT) {
+                std::cerr << "SERVER TIMEOUT - No data for " << timeSinceLastMsg << " seconds." << std::endl;
+                
+                if (onServerShutdown) onServerShutdown();
+                if (onError) onError("Połączenie z serwerem utracone (Timeout)");
+                
+                running = false;
+                break;
+            }
+            continue;
+        }
+
+        // retval > 0 so socket is readable
         MsgHeader hdr;
         int r = recv_msg(sock, hdr, buffer, sizeof(buffer));
         if (r <= 0) {
@@ -167,6 +203,8 @@ void ClientConnection::recvLoop() {
             running = false;
             break;
         }
+        lastServerActivity = std::chrono::steady_clock::now();
+
         handleMessage(hdr, buffer);
     }
 }

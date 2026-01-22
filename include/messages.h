@@ -12,7 +12,7 @@
 #define ALPHABET_SIZE 32
 
 
-
+#pragma pack(push, 1)
 
 typedef struct {
     char nick[MAX_NICK_LEN];
@@ -134,6 +134,6 @@ typedef struct {
     GameResult players[8];
 } MsgGameResults;
 
-
+#pragma pack(pop)
 
 #endif
